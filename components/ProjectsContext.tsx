@@ -35,7 +35,7 @@ export function buildTree(projects: ProjectDTO[]): ProjectTreeNode[] {
     }
   }
   const sortNodes = (nodes: ProjectTreeNode[]) => {
-    nodes.sort((a, b) => a.code.localeCompare(b.code));
+    nodes.sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
     nodes.forEach((n) => sortNodes(n.children));
   };
   sortNodes(roots);

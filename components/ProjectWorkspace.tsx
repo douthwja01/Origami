@@ -1,23 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ProjectForm } from "@/components/ProjectForm";
-import { AssetPanel } from "@/components/AssetPanel";
+import { VaultExplorer } from "@/components/VaultExplorer";
 import { useProjects } from "@/components/ProjectsContext";
-import { formatDate, kindLabel, statusLabel } from "@/lib/format";
-import type { AssetKind, ProjectDetail, ProjectDTO } from "@/lib/types";
-import { ASSET_KINDS } from "@/lib/types";
-
-type Tab = "overview" | AssetKind | "subprojects";
+import { formatDate, statusLabel } from "@/lib/format";
+import type { ProjectDetail } from "@/lib/types";
 
 export function ProjectWorkspace({ id }: { id: string }) {
   const router = useRouter();
   const { refresh } = useProjects();
   const [data, setData] = useState<ProjectDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("overview");
   const [editing, setEditing] = useState(false);
   const [creatingChild, setCreatingChild] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -73,28 +69,13 @@ export function ProjectWorkspace({ id }: { id: string }) {
     router.push("/");
   }
 
-  const tabs = useMemo(() => {
-    if (!project) return [];
-    return [
-      { id: "overview" as const, label: "Overview" },
-      ...ASSET_KINDS.map((kind) => ({
-        id: kind,
-        label: `${kindLabel(kind)} (${project.assetsByKind[kind]})`,
-      })),
-      {
-        id: "subprojects" as const,
-        label: `Subprojects (${project.childCount})`,
-      },
-    ];
-  }, [project]);
-
   return (
     <>
-      <main className="px-5 py-6 lg:px-8">
+      <main className="flex h-full min-h-0 flex-col px-5 py-4 lg:px-8">
         {error && !data ? <p className="text-accent">{error}</p> : null}
         {project ? (
           <>
-            <nav className="mb-3 flex flex-wrap items-center gap-2 text-[12px] text-muted">
+            <nav className="mb-2 flex flex-wrap items-center gap-2 text-[12px] text-muted">
               <Link href="/" className="hover:text-ink">
                 Workshop
               </Link>
@@ -110,7 +91,7 @@ export function ProjectWorkspace({ id }: { id: string }) {
               <span className="text-ink">{project.code}</span>
             </nav>
 
-            <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
+            <header className="mb-4 flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-[12px] text-muted">
@@ -121,7 +102,7 @@ export function ProjectWorkspace({ id }: { id: string }) {
                     {statusLabel(project.status)}
                   </span>
                 </div>
-                <h1 className="mt-1 text-[26px] font-medium tracking-tight">
+                <h1 className="mt-1 text-[22px] font-medium tracking-tight">
                   {project.title}
                 </h1>
                 <p className="text-[13px] text-muted">
@@ -161,42 +142,17 @@ export function ProjectWorkspace({ id }: { id: string }) {
               </div>
             </header>
 
-            <div className="mb-5 flex gap-1 overflow-auto border-b border-line">
-              {tabs.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setTab(item.id)}
-                  className={`whitespace-nowrap px-3 py-2 text-[13px] ${
-                    tab === item.id
-                      ? "border-b-2 border-accent text-ink"
-                      : "text-muted hover:text-ink"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-
-            {tab === "overview" ? (
-              <Overview data={data!} onOpenTab={setTab} />
-            ) : null}
-            {ASSET_KINDS.includes(tab as AssetKind) ? (
-              <AssetPanel
+            <div className="min-h-0 flex-1">
+              <VaultExplorer
                 projectId={project.id}
-                kind={tab as AssetKind}
-                assets={(data?.assets ?? []).filter((a) => a.kind === tab)}
+                assets={data?.assets ?? []}
+                nested={data?.children ?? []}
                 onChanged={async () => {
                   await Promise.all([load(), refresh()]);
                 }}
+                onNewChild={() => setCreatingChild(true)}
               />
-            ) : null}
-        {tab === "subprojects" ? (
-              <Subprojects
-                items={data?.children ?? []}
-                onNew={() => setCreatingChild(true)}
-              />
-            ) : null}
+            </div>
           </>
         ) : !error ? (
           <p className="text-muted">Loading…</p>
@@ -261,127 +217,5 @@ export function ProjectWorkspace({ id }: { id: string }) {
         </div>
       ) : null}
     </>
-  );
-}
-
-function Overview({
-  data,
-  onOpenTab,
-}: {
-  data: ProjectDetail;
-  onOpenTab: (tab: Tab) => void;
-}) {
-  const recent = [...data.assets]
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, 8);
-
-  return (
-    <div className="grid gap-4 lg:grid-cols-3">
-      <section className="rounded-xl border border-line bg-raised p-4 lg:col-span-2">
-        <h2 className="mb-3 text-[12px] uppercase tracking-wider text-muted">
-          Vault
-        </h2>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {ASSET_KINDS.map((kind) => (
-            <button
-              key={kind}
-              type="button"
-              onClick={() => onOpenTab(kind)}
-              className="rounded-lg border border-line bg-canvas px-3 py-3 text-left hover:border-accent/50"
-            >
-              <div className="text-[11px] uppercase tracking-wider text-muted">
-                {kindLabel(kind)}
-              </div>
-              <div className="mt-1 text-[22px] font-medium">
-                {data.project.assetsByKind[kind]}
-              </div>
-            </button>
-          ))}
-        </div>
-        <h3 className="mt-5 mb-2 text-[12px] uppercase tracking-wider text-muted">
-          Recent files
-        </h3>
-        {recent.length === 0 ? (
-          <p className="text-[13px] text-muted">Nothing in the vault yet.</p>
-        ) : (
-          <ul className="divide-y divide-line">
-            {recent.map((asset) => (
-              <li key={asset.id} className="flex justify-between py-2 text-[13px]">
-                <span className="truncate">{asset.filename}</span>
-                <span className="ml-3 shrink-0 text-muted">
-                  {kindLabel(asset.kind)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-      <section className="rounded-xl border border-line bg-raised p-4">
-        <h2 className="mb-3 text-[12px] uppercase tracking-wider text-muted">
-          Nested
-        </h2>
-        {data.children.length === 0 ? (
-          <p className="text-[13px] text-muted">No child projects.</p>
-        ) : (
-          <ul className="space-y-2">
-            {data.children.map((child) => (
-              <li key={child.id}>
-                <Link
-                  href={`/projects/${child.id}`}
-                  className="block rounded-md border border-line px-3 py-2 hover:border-accent/50"
-                >
-                  <div className="font-mono text-[11px] text-muted">{child.code}</div>
-                  <div className="text-[14px]">{child.title}</div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </div>
-  );
-}
-
-function Subprojects({
-  items,
-  onNew,
-}: {
-  items: ProjectDTO[];
-  onNew: () => void;
-}) {
-  return (
-    <div>
-      <div className="mb-3 flex justify-end">
-        <button
-          type="button"
-          onClick={onNew}
-          className="rounded-md bg-accent px-3 py-1.5 text-[13px] text-canvas"
-        >
-          New child
-        </button>
-      </div>
-      {items.length === 0 ? (
-        <p className="text-[13px] text-muted">No nested projects yet.</p>
-      ) : (
-        <div className="grid gap-2 md:grid-cols-2">
-          {items.map((child) => (
-            <Link
-              key={child.id}
-              href={`/projects/${child.id}`}
-              className="rounded-xl border border-line bg-raised px-4 py-3 hover:border-accent/50"
-            >
-              <div className="flex items-center gap-2">
-                <span className={`status-dot ${child.status}`} />
-                <span className="font-mono text-[11px] text-muted">{child.code}</span>
-              </div>
-              <div className="mt-1 text-[16px]">{child.title}</div>
-              <div className="mt-1 text-[12px] text-muted">
-                {formatDate(child.startDate)} · {child.assetCount} files
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }

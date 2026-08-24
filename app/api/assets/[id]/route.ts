@@ -2,7 +2,8 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { json, isResponse, requireUser } from "@/lib/api";
-import { deleteAssetRow, getAsset } from "@/lib/projects";
+import { deleteAssetRow, getAsset, updateAsset } from "@/lib/projects";
+import { isKind } from "@/lib/types";
 import { absoluteFromStorage, removeVaultFile } from "@/lib/vault";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -38,6 +39,34 @@ export async function GET(request: Request, ctx: Ctx) {
       "Cache-Control": "private, no-store",
     },
   });
+}
+
+export async function PATCH(request: Request, ctx: Ctx) {
+  const user = await requireUser();
+  if (isResponse(user)) return user;
+  const { id } = await ctx.params;
+
+  let body: { kind?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: "Invalid JSON" }, 400);
+  }
+
+  if (body.kind === undefined) {
+    return json({ error: "kind is required" }, 400);
+  }
+  if (!isKind(body.kind)) {
+    return json({ error: "Invalid kind" }, 400);
+  }
+
+  try {
+    const asset = await updateAsset(id, { kind: body.kind });
+    return json({ asset });
+  } catch (error) {
+    const statusCode = (error as { status?: number }).status ?? 500;
+    return json({ error: (error as Error).message }, statusCode);
+  }
 }
 
 export async function DELETE(_request: Request, ctx: Ctx) {

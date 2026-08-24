@@ -180,6 +180,54 @@ export function extensionOf(filename: string): string {
   return parts.at(-1) ?? "";
 }
 
+const MIME_BY_EXT: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+  bmp: "image/bmp",
+  ico: "image/x-icon",
+  mp4: "video/mp4",
+  webm: "video/webm",
+  mov: "video/quicktime",
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  ogg: "audio/ogg",
+  flac: "audio/flac",
+  pdf: "application/pdf",
+  txt: "text/plain",
+  md: "text/markdown",
+  markdown: "text/markdown",
+  csv: "text/csv",
+  json: "application/json",
+  html: "text/html",
+  css: "text/css",
+  js: "text/javascript",
+  mjs: "text/javascript",
+  ts: "text/plain",
+  tsx: "text/plain",
+  jsx: "text/javascript",
+  py: "text/x-python",
+  rs: "text/plain",
+  go: "text/plain",
+  xml: "application/xml",
+  yaml: "text/yaml",
+  yml: "text/yaml",
+  stl: "model/stl",
+  obj: "model/obj",
+  step: "application/step",
+  stp: "application/step",
+  dxf: "image/vnd.dxf",
+  zip: "application/zip",
+};
+
+export function mimeFromFilename(filename: string): string {
+  const ext = extensionOf(filename);
+  return MIME_BY_EXT[ext] || "application/octet-stream";
+}
+
 export function inferKind(filename: string): AssetKind {
   const base = basename(filename).toLowerCase();
   if (CODE_NAMES.has(base)) return "code";

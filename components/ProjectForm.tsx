@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { descendantIdSet, useProjects } from "@/components/ProjectsContext";
 import { todayIso, statusLabel } from "@/lib/format";
+import { nextChildCode } from "@/lib/project-code";
 import { STATUSES, type ProjectDTO, type ProjectStatus } from "@/lib/types";
 
 type Props = {
@@ -35,6 +36,17 @@ export function ProjectForm({
 
   const blocked = project ? descendantIdSet(projects, project.id) : new Set<string>();
   const parentOptions = projects.filter((p) => !blocked.has(p.id));
+  const selectedParent = parentId
+    ? projects.find((p) => p.id === parentId)
+    : undefined;
+  const autoCodeHint = selectedParent
+    ? nextChildCode(
+        selectedParent.code,
+        projects
+          .filter((p) => p.parentId === selectedParent.id && p.id !== project?.id)
+          .map((p) => p.code),
+      )
+    : "PROJ-001";
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -109,7 +121,7 @@ export function ProjectForm({
             <input
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              placeholder="Auto ORI-0001"
+              placeholder={`Auto ${autoCodeHint}`}
               className="w-full rounded-md border border-line bg-canvas px-3 py-2 font-mono text-[13px] outline-none focus:border-accent"
             />
           </label>

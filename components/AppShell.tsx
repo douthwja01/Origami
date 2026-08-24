@@ -19,24 +19,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <ProjectsProvider>
       <div className="app-frame">
-        <aside className="hidden min-h-screen flex-col border-r border-line bg-raised md:flex">
-          <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-4">
-            <div className="flex items-center gap-2.5">
-              <span className="fold h-8 w-8 rounded-md" />
-              <div>
-                <div className="text-[13px] font-medium tracking-[0.18em] text-ink">
-                  ORIGAMI
-                </div>
-                <div className="text-[11px] text-muted">Project vault</div>
+        <aside className="hidden h-dvh min-h-0 flex-col overflow-hidden border-r border-line bg-raised md:flex">
+          <div className="flex items-center gap-2.5 border-b border-line px-4 py-4">
+            <span className="fold h-8 w-8 rounded-md" />
+            <div>
+              <div className="text-[13px] font-medium tracking-[0.18em] text-ink">
+                ORIGAMI
               </div>
+              <div className="text-[11px] text-muted">Project vault</div>
             </div>
-            <button
-              type="button"
-              onClick={logout}
-              className="text-[11px] text-muted hover:text-ink"
-            >
-              Sign out
-            </button>
           </div>
           <div className="border-b border-line px-3 py-3">
             <button
@@ -49,13 +40,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           <ProjectTree />
         </aside>
-        <div className="min-w-0 bg-canvas">
-          <div className="flex items-center justify-between border-b border-line px-4 py-3 md:hidden">
-            <div className="flex items-center gap-2">
+        <div className="flex h-dvh min-h-0 min-w-0 flex-col overflow-hidden bg-canvas">
+          <div className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-2.5">
+            <div className="flex items-center gap-2 md:hidden">
               <span className="fold h-7 w-7 rounded-md" />
               <span className="text-[13px] tracking-[0.16em]">ORIGAMI</span>
-            </div>
-            <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setCreating(true)}
@@ -63,16 +52,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               >
                 New
               </button>
-              <button
-                type="button"
-                onClick={logout}
-                className="text-[12px] text-muted"
-              >
-                Sign out
-              </button>
             </div>
+            <button
+              type="button"
+              onClick={logout}
+              className="ml-auto text-[12px] text-muted hover:text-ink"
+            >
+              Sign out
+            </button>
           </div>
-          {children}
+          <div className="min-h-0 flex-1 overflow-auto">{children}</div>
         </div>
       </div>
       {creating ? (

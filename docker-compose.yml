@@ -27,11 +27,11 @@ services:
       ORIGAMI_VAULT_DIR: /data/vault
       ORIGAMI_MAX_UPLOAD_MB: "512"
     volumes:
-      - vault:/data/vault
+      # Host directory so uploads persist outside Docker. Override with ORIGAMI_VAULT_HOST.
+      - ${ORIGAMI_VAULT_HOST:-./data/vault}:/data/vault
     depends_on:
       db:
         condition: service_healthy
 
 volumes:
   pgdata:
-  vault:

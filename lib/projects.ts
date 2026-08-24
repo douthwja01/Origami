@@ -1,15 +1,15 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { assets, projects } from "@/lib/db/schema";
+import {
+  formatRootProjectCode,
+  nextChildCode,
+} from "@/lib/project-code";
 import type { AssetDTO, AssetKind, ProjectDTO, ProjectStatus } from "@/lib/types";
 import { removeProjectVault } from "@/lib/vault";
 
 function emptyKinds(): Record<AssetKind, number> {
   return { media: 0, code: 0, document: 0, cad: 0 };
-}
-
-function formatCode(n: number): string {
-  return `ORI-${String(n).padStart(4, "0")}`;
 }
 
 export function toProjectDTO(
@@ -92,7 +92,23 @@ export async function getProjectByCode(code: string) {
   return row ?? null;
 }
 
-export async function nextProjectCode(): Promise<string> {
+export async function nextProjectCode(parentId?: string | null): Promise<string> {
+  if (parentId) {
+    const parent = await getProjectRow(parentId);
+    if (!parent) {
+      throw Object.assign(new Error("Parent project not found"), { status: 400 });
+    }
+    const db = getDb();
+    const siblings = await db
+      .select({ code: projects.code })
+      .from(projects)
+      .where(eq(projects.parentId, parentId));
+    return nextChildCode(
+      parent.code,
+      siblings.map((row) => row.code),
+    );
+  }
+
   const db = getDb();
   const result = await db.execute(
     sql`select nextval('project_code_seq') as n`,
@@ -100,7 +116,7 @@ export async function nextProjectCode(): Promise<string> {
   const n = Number(
     (result.rows[0] as { n: string | number } | undefined)?.n ?? 1,
   );
-  return formatCode(n);
+  return formatRootProjectCode(n);
 }
 
 export async function createProject(input: {
@@ -111,16 +127,16 @@ export async function createProject(input: {
   code?: string;
 }): Promise<ProjectDTO> {
   const db = getDb();
-  const code = input.code?.trim() || (await nextProjectCode());
-  const existing = await getProjectByCode(code);
-  if (existing) {
-    throw Object.assign(new Error("Project ID already exists"), { status: 409 });
-  }
   if (input.parentId) {
     const parent = await getProjectRow(input.parentId);
     if (!parent) {
       throw Object.assign(new Error("Parent project not found"), { status: 400 });
     }
+  }
+  const code = input.code?.trim() || (await nextProjectCode(input.parentId));
+  const existing = await getProjectByCode(code);
+  if (existing) {
+    throw Object.assign(new Error("Project ID already exists"), { status: 409 });
   }
   const [row] = await db
     .insert(projects)
@@ -310,6 +326,24 @@ export async function insertAsset(input: {
 }) {
   const db = getDb();
   const [row] = await db.insert(assets).values(input).returning();
+  return toAssetDTO(row);
+}
+
+export async function updateAsset(
+  id: string,
+  patch: { kind?: AssetKind },
+): Promise<AssetDTO> {
+  const existing = await getAsset(id);
+  if (!existing) {
+    throw Object.assign(new Error("Asset not found"), { status: 404 });
+  }
+  const [row] = await getDb()
+    .update(assets)
+    .set({
+      ...(patch.kind !== undefined ? { kind: patch.kind } : {}),
+    })
+    .where(eq(assets.id, id))
+    .returning();
   return toAssetDTO(row);
 }
 

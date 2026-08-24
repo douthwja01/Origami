@@ -36,7 +36,8 @@ npm run dev
 | `ORIGAMI_USER` | Login username |
 | `ORIGAMI_PASSWORD` | Login password (dev / first run) |
 | `ORIGAMI_PASSWORD_HASH` | bcrypt hash; preferred in production |
-| `ORIGAMI_VAULT_DIR` | Where uploaded files are stored |
+| `ORIGAMI_VAULT_DIR` | Where uploaded files are stored (inside the process / container) |
+| `ORIGAMI_VAULT_HOST` | Host folder bind-mounted as the vault when using Docker Compose (default `./data/vault`) |
 | `ORIGAMI_MAX_UPLOAD_MB` | Upload cap (default 512) |
 
 Hash a production password:
@@ -64,11 +65,11 @@ origami.example.com {
 
 4. Run `docker compose up -d --build`.
 
-Postgres data lives in the `pgdata` volume. Vault files live in the `vault` volume (`/data/vault` in the app container). Back both up.
+Postgres data lives in the `pgdata` Docker volume. Vault files are bind-mounted from `./data/vault` on the host (override with `ORIGAMI_VAULT_HOST` in `.env`). Back both up.
 
 ## Projects
 
-- IDs are assigned as `ORI-0001`, `ORI-0002`, … and can be edited.
+- Top-level IDs are assigned as `PROJ-001`, `PROJ-002`, … Nested projects use dotted IDs (`001.1`, `001.1.1`, …). IDs can be edited.
 - Statuses: Planned, Active, On hold, Done, Archived.
 - A project can nest under another. Moving a project under itself or a descendant is blocked.
 - Deleting a project that has children or files requires **Delete with nested + files**.
