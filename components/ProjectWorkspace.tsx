@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ProjectForm } from "@/components/ProjectForm";
 import { VaultExplorer } from "@/components/VaultExplorer";
@@ -75,22 +74,6 @@ export function ProjectWorkspace({ id }: { id: string }) {
         {error && !data ? <p className="text-accent">{error}</p> : null}
         {project ? (
           <>
-            <nav className="mb-2 flex flex-wrap items-center gap-2 text-[12px] text-muted">
-              <Link href="/" className="hover:text-ink">
-                Workshop
-              </Link>
-              {data?.ancestors.map((a) => (
-                <span key={a.id} className="flex items-center gap-2">
-                  <span>/</span>
-                  <Link href={`/projects/${a.id}`} className="hover:text-ink">
-                    {a.code}
-                  </Link>
-                </span>
-              ))}
-              <span>/</span>
-              <span className="text-ink">{project.code}</span>
-            </nav>
-
             <header className="mb-4 flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -110,35 +93,33 @@ export function ProjectWorkspace({ id }: { id: string }) {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  className="rounded-md border border-line px-3 py-1.5 text-[13px] hover:border-accent"
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
+                <IconButton label="Edit" onClick={() => setEditing(true)}>
+                  <IconPencil />
+                </IconButton>
+                <IconButton
+                  label="New child"
                   onClick={() => setCreatingChild(true)}
-                  className="rounded-md border border-line px-3 py-1.5 text-[13px] hover:border-accent"
                 >
-                  New child
-                </button>
-                <button
-                  type="button"
+                  <IconNewChild />
+                </IconButton>
+                <IconButton
+                  label={project.status === "archived" ? "Unarchive" : "Archive"}
                   onClick={archive}
                   disabled={busy}
-                  className="rounded-md border border-line px-3 py-1.5 text-[13px] hover:border-accent"
                 >
-                  {project.status === "archived" ? "Unarchive" : "Archive"}
-                </button>
-                <button
-                  type="button"
+                  {project.status === "archived" ? (
+                    <IconUnarchive />
+                  ) : (
+                    <IconArchive />
+                  )}
+                </IconButton>
+                <IconButton
+                  label="Delete"
                   onClick={() => setConfirmDelete(true)}
-                  className="rounded-md border border-line px-3 py-1.5 text-[13px] text-accent hover:border-accent"
+                  danger
                 >
-                  Delete
-                </button>
+                  <IconTrash />
+                </IconButton>
               </div>
             </header>
 
@@ -217,5 +198,148 @@ export function ProjectWorkspace({ id }: { id: string }) {
         </div>
       ) : null}
     </>
+  );
+}
+
+function IconButton({
+  label,
+  onClick,
+  disabled,
+  danger,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
+      className={`inline-flex h-8 w-8 items-center justify-center rounded-md border border-line hover:border-accent disabled:opacity-50 ${
+        danger ? "text-accent" : "text-muted hover:text-ink"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function IconPencil() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M11.2 2.8 13.2 4.8 5.6 12.4 3 13l.6-2.6 7.6-7.6Z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <path d="m10.1 3.9 2 2" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+function IconNewChild() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect
+        x="2.5"
+        y="2.5"
+        width="5.5"
+        height="5.5"
+        rx="0.8"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+      <path
+        d="M5.2 8v2.2H8"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M11.2 8.2v5.2M8.6 10.8h5.2"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function IconArchive() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M2.5 3.8h11v2.4h-11V3.8Z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M3.6 6.2v6.2h8.8V6.2"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <path d="M6.5 8.8h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconUnarchive() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M2.5 3.8h11v2.4h-11V3.8Z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M3.6 6.2v6.2h8.8V6.2"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8 11.4V7.8M6.4 9.2 8 7.6l1.6 1.6"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IconTrash() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M3.2 4.4h9.6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <path
+        d="M6.2 4.4V3.2h3.6v1.2"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="m4.4 4.4.7 8.2h5.8l.7-8.2"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6.8 6.8v3.4M9.2 6.8v3.4"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }

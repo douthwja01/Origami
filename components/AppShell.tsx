@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ProjectsProvider } from "@/components/ProjectsContext";
+import { ProjectBreadcrumbs } from "@/components/ProjectBreadcrumbs";
+import { SettingsMenu } from "@/components/SettingsMenu";
 import { ProjectTree } from "@/components/ProjectTree";
 import { ProjectForm } from "@/components/ProjectForm";
 
@@ -42,7 +44,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </aside>
         <div className="flex h-dvh min-h-0 min-w-0 flex-col overflow-hidden bg-canvas">
           <div className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-2.5">
-            <div className="flex items-center gap-2 md:hidden">
+            <div className="flex shrink-0 items-center gap-2 md:hidden">
               <span className="fold h-7 w-7 rounded-md" />
               <span className="text-[13px] tracking-[0.16em]">ORIGAMI</span>
               <button
@@ -53,13 +55,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 New
               </button>
             </div>
-            <button
-              type="button"
-              onClick={logout}
-              className="ml-auto text-[12px] text-muted hover:text-ink"
-            >
-              Sign out
-            </button>
+            <ProjectBreadcrumbs />
+            <div className="ml-auto flex shrink-0 items-center gap-1">
+              <SettingsMenu />
+              <button
+                type="button"
+                onClick={logout}
+                className="px-1.5 text-[12px] text-muted hover:text-ink"
+              >
+                Sign out
+              </button>
+            </div>
           </div>
           <div className="min-h-0 flex-1 overflow-auto">{children}</div>
         </div>

@@ -14,7 +14,7 @@ import {
 
 const ASSET_DRAG = "application/x-origami-asset";
 
-type FolderId = AssetKind | "nested";
+type TabId = "overview" | AssetKind | "nested";
 
 type Props = {
   projectId: string;
@@ -32,7 +32,7 @@ export function VaultExplorer({
   onNewChild,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [folder, setFolder] = useState<FolderId | null>(null);
+  const [tab, setTab] = useState<TabId>("overview");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -54,25 +54,33 @@ export function VaultExplorer({
     return next;
   }, [assets]);
 
-  const activeFolder: FolderId =
-    folder ??
-    ASSET_KINDS.find((kind) => assets.some((asset) => asset.kind === kind)) ??
-    "media";
+  const kindFolder = ASSET_KINDS.includes(tab as AssetKind)
+    ? (tab as AssetKind)
+    : null;
 
   const visible = useMemo(
     () =>
-      activeFolder === "nested"
-        ? []
-        : assets
-            .filter((asset) => asset.kind === activeFolder)
-            .sort((a, b) => a.filename.localeCompare(b.filename)),
-    [assets, activeFolder],
+      kindFolder
+        ? assets
+            .filter((asset) => asset.kind === kindFolder)
+            .sort((a, b) => a.filename.localeCompare(b.filename))
+        : [],
+    [assets, kindFolder],
   );
 
   const selected = useMemo(() => {
+    if (!kindFolder) return null;
     if (!selectedId) return visible[0] ?? null;
     return visible.find((asset) => asset.id === selectedId) ?? visible[0] ?? null;
-  }, [selectedId, visible]);
+  }, [kindFolder, selectedId, visible]);
+
+  const recent = useMemo(
+    () =>
+      [...assets]
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, 10),
+    [assets],
+  );
 
   async function uploadFiles(files: FileList | File[], kind: AssetKind) {
     setError(null);
@@ -95,7 +103,7 @@ export function VaultExplorer({
     }
     setUploading(null);
     if (last) {
-      setFolder(last.kind);
+      setTab(last.kind);
       setSelectedId(last.id);
     }
     await onChanged();
@@ -116,7 +124,7 @@ export function VaultExplorer({
       setError(data.error || "Could not move file");
       return;
     }
-    setFolder(kind);
+    setTab(kind);
     setSelectedId(assetId);
     await onChanged();
   }
@@ -134,7 +142,7 @@ export function VaultExplorer({
   }, [creating, pendingDelete]);
 
   async function createFile() {
-    if (activeFolder === "nested") return;
+    if (!kindFolder) return;
     const filename = newName.trim();
     if (!filename || /[\\/]/.test(filename)) {
       setError("Enter a file name without path separators");
@@ -143,7 +151,7 @@ export function VaultExplorer({
     setBusy(true);
     setError(null);
     const file = new File([""], filename, { type: mimeFromFilename(filename) });
-    const created = await uploadFiles([file], activeFolder);
+    const created = await uploadFiles([file], kindFolder);
     setBusy(false);
     if (created) {
       setCreating(false);
@@ -166,10 +174,9 @@ export function VaultExplorer({
     await onChanged();
   }
 
-  function handleDrop(target: FolderId, event: React.DragEvent) {
+  function handleDrop(target: AssetKind, event: React.DragEvent) {
     event.preventDefault();
     setDropTarget(null);
-    if (target === "nested") return;
     const assetId =
       event.dataTransfer.getData(ASSET_DRAG) ||
       event.dataTransfer.getData("text/plain");
@@ -178,17 +185,15 @@ export function VaultExplorer({
       return;
     }
     if (event.dataTransfer.files.length) {
-      setFolder(target);
+      setTab(target);
       void uploadFiles(event.dataTransfer.files, target);
     }
   }
 
-  function allowDrop(target: FolderId, event: React.DragEvent) {
-    const hasFiles = [...event.dataTransfer.types].includes("Files");
-    const hasAsset =
-      [...event.dataTransfer.types].includes(ASSET_DRAG) ||
-      [...event.dataTransfer.types].includes("text/plain");
-    if (target === "nested") return;
+  function allowDrop(target: AssetKind, event: React.DragEvent) {
+    const types = [...event.dataTransfer.types];
+    const hasFiles = types.includes("Files");
+    const hasAsset = types.includes(ASSET_DRAG) || types.includes("text/plain");
     if (hasFiles || hasAsset) {
       event.preventDefault();
       event.dataTransfer.dropEffect = hasFiles ? "copy" : "move";
@@ -196,22 +201,27 @@ export function VaultExplorer({
     }
   }
 
-  const kindFolder = activeFolder === "nested" ? null : activeFolder;
+  function openTab(next: TabId) {
+    setTab(next);
+    if (next !== kindFolder) setSelectedId(null);
+  }
 
   return (
-    <div className="grid h-full min-h-[32rem] overflow-hidden rounded-xl border border-line bg-raised lg:grid-cols-[220px_minmax(0,1fr)_minmax(0,1.15fr)]">
-      <nav className="min-h-0 overflow-auto border-b border-line p-2 lg:border-b-0 lg:border-r">
-        <div className="px-2 py-1.5 text-[11px] uppercase tracking-wider text-muted">
-          Vault
-        </div>
+    <div className="flex h-full min-h-[32rem] flex-col overflow-hidden rounded-xl border border-line bg-raised">
+      <nav className="flex shrink-0 items-end gap-1 overflow-x-auto border-b border-line px-2">
+        <Tab
+          label="Overview"
+          active={tab === "overview"}
+          onClick={() => openTab("overview")}
+        />
         {ASSET_KINDS.map((kind) => (
-          <button
+          <Tab
             key={kind}
-            type="button"
-            onClick={() => {
-              setFolder(kind);
-              setSelectedId(null);
-            }}
+            label={kindLabel(kind)}
+            count={counts[kind]}
+            active={tab === kind}
+            dropActive={dropTarget === kind}
+            onClick={() => openTab(kind)}
             onDragOver={(event) => allowDrop(kind, event)}
             onDragLeave={(event) => {
               if (!event.currentTarget.contains(event.relatedTarget as Node)) {
@@ -219,46 +229,22 @@ export function VaultExplorer({
               }
             }}
             onDrop={(event) => handleDrop(kind, event)}
-            className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left ${
-              activeFolder === kind
-                ? "bg-overlay text-ink"
-                : "text-muted hover:bg-overlay/60 hover:text-ink"
-            } ${dropTarget === kind ? "ring-1 ring-accent" : ""}`}
-          >
-            <FolderMark open={activeFolder === kind} />
-            <span className="min-w-0 flex-1 truncate text-[13px]">
-              {kindLabel(kind)}
-            </span>
-            <span className="font-mono text-[11px] text-muted">{counts[kind]}</span>
-          </button>
+          />
         ))}
-        <div className="mt-3 px-2 py-1.5 text-[11px] uppercase tracking-wider text-muted">
-          Nested
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            setFolder("nested");
-            setSelectedId(null);
-          }}
-          className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left ${
-            activeFolder === "nested"
-              ? "bg-overlay text-ink"
-              : "text-muted hover:bg-overlay/60 hover:text-ink"
-          }`}
-        >
-          <FolderMark open={activeFolder === "nested"} />
-          <span className="min-w-0 flex-1 truncate text-[13px]">Projects</span>
-          <span className="font-mono text-[11px] text-muted">{nested.length}</span>
-        </button>
+        <Tab
+          label="Projects"
+          count={nested.length}
+          active={tab === "nested"}
+          onClick={() => openTab("nested")}
+        />
       </nav>
 
-      <section className="flex min-h-0 flex-col border-b border-line lg:border-b-0 lg:border-r">
+      {tab !== "overview" ? (
         <header className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2">
           <div className="min-w-0 flex-1 text-[12px] text-muted">
-            {activeFolder === "nested" ? "Nested / Projects" : `Vault / ${kindLabel(activeFolder)}`}
+            {tab === "nested" ? "Nested projects" : kindLabel(tab)}
           </div>
-          {activeFolder === "nested" ? (
+          {tab === "nested" ? (
             <button
               type="button"
               onClick={onNewChild}
@@ -309,121 +295,121 @@ export function VaultExplorer({
             }}
           />
         </header>
+      ) : null}
 
-        {error ? (
-          <p className="shrink-0 px-3 py-2 text-[12px] text-accent">{error}</p>
-        ) : null}
-        {uploading ? (
-          <p className="shrink-0 px-3 py-2 text-[12px] text-muted">
-            Uploading {uploading}…
-          </p>
-        ) : null}
+      {error ? (
+        <p className="shrink-0 px-3 py-2 text-[12px] text-accent">{error}</p>
+      ) : null}
+      {uploading ? (
+        <p className="shrink-0 px-3 py-2 text-[12px] text-muted">
+          Uploading {uploading}…
+        </p>
+      ) : null}
 
-        <div
-          className={`min-h-0 flex-1 overflow-auto ${
-            dropTarget === kindFolder ? "bg-overlay/70" : ""
-          }`}
-          onDragOver={(event) => kindFolder && allowDrop(kindFolder, event)}
-          onDragLeave={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node)) {
-              setDropTarget((current) =>
-                current === kindFolder ? null : current,
-              );
-            }
-          }}
-          onDrop={(event) => kindFolder && handleDrop(kindFolder, event)}
-        >
-          {activeFolder === "nested" ? (
-            nested.length === 0 ? (
-              <EmptyPane text="No nested projects yet." />
-            ) : (
-              <ul>
-                {nested.map((child) => (
-                  <li key={child.id}>
-                    <Link
-                      href={`/projects/${child.id}`}
-                      className="flex items-center gap-2 px-3 py-2 hover:bg-overlay/60"
-                    >
-                      <span className={`status-dot ${child.status}`} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px]">{child.title}</span>
-                        <span className="block font-mono text-[11px] text-muted">
-                          {child.code} · {formatDate(child.startDate)}
-                        </span>
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )
-          ) : visible.length === 0 ? (
-            <EmptyPane
-              text={
-                dropTarget === kindFolder
-                  ? `Drop to add files to ${kindLabel(activeFolder)}`
-                  : "Empty folder. Drop files here, or use New file / Upload."
-              }
-            />
-          ) : (
-            <ul>
-              {visible.map((asset) => (
-                <li key={asset.id}>
-                  <div
-                    draggable
-                    onDragStart={(event) => {
-                      event.dataTransfer.setData(ASSET_DRAG, asset.id);
-                      event.dataTransfer.setData("text/plain", asset.id);
-                      event.dataTransfer.effectAllowed = "move";
-                      setDraggingId(asset.id);
-                    }}
-                    onDragEnd={() => {
-                      setDraggingId(null);
-                      setDropTarget(null);
-                    }}
-                    className={`flex items-center gap-2 px-3 py-2 ${
-                      selected?.id === asset.id ? "bg-overlay" : "hover:bg-overlay/60"
-                    } ${draggingId === asset.id ? "opacity-50" : ""}`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setSelectedId(asset.id)}
-                      className="min-w-0 flex-1 text-left"
-                    >
-                      <div className="truncate text-[13px]">{asset.filename}</div>
-                      <div className="font-mono text-[11px] text-muted">
-                        {formatBytes(asset.sizeBytes)}
-                      </div>
-                    </button>
-                    <a
-                      href={`/api/assets/${asset.id}?download=1`}
-                      className="shrink-0 text-[11px] text-muted hover:text-ink"
-                    >
-                      Download
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => setPendingDelete(asset)}
-                      className="shrink-0 text-[11px] text-muted hover:text-accent"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
-
-      <section className="min-h-[280px] min-w-0 overflow-auto">
-        {activeFolder === "nested" ? (
-          <EmptyPane text="Open a nested project from the list." />
-        ) : selected ? (
-          <AssetPreview asset={selected} />
+      <div className="min-h-0 flex-1 overflow-hidden">
+        {tab === "overview" ? (
+          <Overview
+            counts={counts}
+            nested={nested}
+            recent={recent}
+            dropTarget={dropTarget}
+            onOpenTab={openTab}
+            onOpenFile={(asset) => {
+              setTab(asset.kind);
+              setSelectedId(asset.id);
+            }}
+            onNewChild={onNewChild}
+            allowDrop={allowDrop}
+            handleDrop={handleDrop}
+            setDropTarget={setDropTarget}
+          />
+        ) : tab === "nested" ? (
+          <NestedList nested={nested} />
         ) : (
-          <EmptyPane text="Select a file to preview, or drop files into this folder." />
+          <div className="grid h-full min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+            <div
+              className={`min-h-0 overflow-auto border-b border-line lg:border-b-0 lg:border-r ${
+                dropTarget === kindFolder ? "bg-overlay/70" : ""
+              }`}
+              onDragOver={(event) => kindFolder && allowDrop(kindFolder, event)}
+              onDragLeave={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                  setDropTarget((current) =>
+                    current === kindFolder ? null : current,
+                  );
+                }
+              }}
+              onDrop={(event) => kindFolder && handleDrop(kindFolder, event)}
+            >
+              {visible.length === 0 ? (
+                <EmptyPane
+                  text={
+                    dropTarget === kindFolder
+                      ? `Drop to add files to ${kindLabel(tab)}`
+                      : "Empty folder. Drop files here, or use New file / Upload."
+                  }
+                />
+              ) : (
+                <ul>
+                  {visible.map((asset) => (
+                    <li key={asset.id}>
+                      <div
+                        draggable
+                        onDragStart={(event) => {
+                          event.dataTransfer.setData(ASSET_DRAG, asset.id);
+                          event.dataTransfer.setData("text/plain", asset.id);
+                          event.dataTransfer.effectAllowed = "move";
+                          setDraggingId(asset.id);
+                        }}
+                        onDragEnd={() => {
+                          setDraggingId(null);
+                          setDropTarget(null);
+                        }}
+                        className={`flex items-center gap-2 px-3 py-2 ${
+                          selected?.id === asset.id
+                            ? "bg-overlay"
+                            : "hover:bg-overlay/60"
+                        } ${draggingId === asset.id ? "opacity-50" : ""}`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setSelectedId(asset.id)}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <div className="truncate text-[13px]">{asset.filename}</div>
+                          <div className="font-mono text-[11px] text-muted">
+                            {formatBytes(asset.sizeBytes)}
+                          </div>
+                        </button>
+                        <a
+                          href={`/api/assets/${asset.id}?download=1`}
+                          className="shrink-0 text-[11px] text-muted hover:text-ink"
+                        >
+                          Download
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => setPendingDelete(asset)}
+                          className="shrink-0 text-[11px] text-muted hover:text-accent"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="min-h-[280px] min-w-0 overflow-auto">
+              {selected ? (
+                <AssetPreview asset={selected} />
+              ) : (
+                <EmptyPane text="Select a file to preview, or drop files into this folder." />
+              )}
+            </div>
+          </div>
         )}
-      </section>
+      </div>
 
       {creating && kindFolder ? (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/55 p-4 pt-[18vh]">
@@ -496,6 +482,198 @@ export function VaultExplorer({
   );
 }
 
+function Tab({
+  label,
+  count,
+  active,
+  dropActive,
+  onClick,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+}: {
+  label: string;
+  count?: number;
+  active: boolean;
+  dropActive?: boolean;
+  onClick: () => void;
+  onDragOver?: (event: React.DragEvent<HTMLButtonElement>) => void;
+  onDragLeave?: (event: React.DragEvent<HTMLButtonElement>) => void;
+  onDrop?: (event: React.DragEvent<HTMLButtonElement>) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      className={`-mb-px flex shrink-0 items-center gap-2 border-b-2 px-3 py-2.5 text-[13px] ${
+        active
+          ? "border-accent text-ink"
+          : "border-transparent text-muted hover:text-ink"
+      } ${dropActive ? "bg-overlay" : ""}`}
+    >
+      {label}
+      {count !== undefined ? (
+        <span className="font-mono text-[11px] text-muted">{count}</span>
+      ) : null}
+    </button>
+  );
+}
+
+function Overview({
+  counts,
+  nested,
+  recent,
+  dropTarget,
+  onOpenTab,
+  onOpenFile,
+  onNewChild,
+  allowDrop,
+  handleDrop,
+  setDropTarget,
+}: {
+  counts: Record<AssetKind, number>;
+  nested: ProjectDTO[];
+  recent: AssetDTO[];
+  dropTarget: string | null;
+  onOpenTab: (tab: TabId) => void;
+  onOpenFile: (asset: AssetDTO) => void;
+  onNewChild: () => void;
+  allowDrop: (target: AssetKind, event: React.DragEvent) => void;
+  handleDrop: (target: AssetKind, event: React.DragEvent) => void;
+  setDropTarget: (value: string | null | ((current: string | null) => string | null)) => void;
+}) {
+  const totalFiles = ASSET_KINDS.reduce((sum, kind) => sum + counts[kind], 0);
+
+  return (
+    <div className="h-full overflow-auto p-4 lg:p-5">
+      <p className="mb-4 text-[13px] text-muted">
+        {totalFiles} {totalFiles === 1 ? "file" : "files"}
+        {" · "}
+        {nested.length} nested {nested.length === 1 ? "project" : "projects"}
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {ASSET_KINDS.map((kind) => (
+          <button
+            key={kind}
+            type="button"
+            onClick={() => onOpenTab(kind)}
+            onDragOver={(event) => allowDrop(kind, event)}
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                setDropTarget((current) => (current === kind ? null : current));
+              }
+            }}
+            onDrop={(event) => handleDrop(kind, event)}
+            className={`rounded-lg border px-3 py-3 text-left hover:border-accent ${
+              dropTarget === kind ? "border-accent bg-overlay" : "border-line"
+            }`}
+          >
+            <div className="text-[13px] text-ink">{kindLabel(kind)}</div>
+            <div className="mt-1 font-mono text-[12px] text-muted">
+              {counts[kind]} {counts[kind] === 1 ? "file" : "files"}
+            </div>
+          </button>
+        ))}
+      </div>
+
+      <section className="mt-6">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-[13px] font-medium">Nested projects</h2>
+          <button
+            type="button"
+            onClick={onNewChild}
+            className="text-[12px] text-muted hover:text-ink"
+          >
+            New
+          </button>
+        </div>
+        {nested.length === 0 ? (
+          <p className="text-[13px] text-muted">No nested projects yet.</p>
+        ) : (
+          <ul className="divide-y divide-line rounded-lg border border-line">
+            {nested.map((child) => (
+              <li key={child.id}>
+                <Link
+                  href={`/projects/${child.id}`}
+                  className="flex items-center gap-2 px-3 py-2 hover:bg-overlay/60"
+                >
+                  <span className={`status-dot ${child.status}`} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px]">{child.title}</span>
+                    <span className="block font-mono text-[11px] text-muted">
+                      {child.code} · {formatDate(child.startDate)}
+                    </span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="mt-6">
+        <h2 className="mb-2 text-[13px] font-medium">Recent files</h2>
+        {recent.length === 0 ? (
+          <p className="text-[13px] text-muted">
+            Nothing in the vault yet. Open a folder tab to upload.
+          </p>
+        ) : (
+          <ul className="divide-y divide-line rounded-lg border border-line">
+            {recent.map((asset) => (
+              <li key={asset.id}>
+                <button
+                  type="button"
+                  onClick={() => onOpenFile(asset)}
+                  className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-overlay/60"
+                >
+                  <span className="min-w-0 flex-1 truncate text-[13px]">
+                    {asset.filename}
+                  </span>
+                  <span className="shrink-0 text-[12px] text-muted">
+                    {kindLabel(asset.kind)}
+                  </span>
+                  <span className="shrink-0 font-mono text-[11px] text-muted">
+                    {formatBytes(asset.sizeBytes)}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function NestedList({ nested }: { nested: ProjectDTO[] }) {
+  if (nested.length === 0) {
+    return <EmptyPane text="No nested projects yet." />;
+  }
+  return (
+    <ul className="h-full overflow-auto">
+      {nested.map((child) => (
+        <li key={child.id}>
+          <Link
+            href={`/projects/${child.id}`}
+            className="flex items-center gap-2 px-3 py-2 hover:bg-overlay/60"
+          >
+            <span className={`status-dot ${child.status}`} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13px]">{child.title}</span>
+              <span className="block font-mono text-[11px] text-muted">
+                {child.code} · {formatDate(child.startDate)}
+              </span>
+            </span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function placeholderFor(kind: AssetKind): string {
   switch (kind) {
     case "media":
@@ -514,29 +692,5 @@ function EmptyPane({ text }: { text: string }) {
     <div className="flex h-full min-h-[220px] items-center justify-center px-6 text-center text-[13px] text-muted">
       {text}
     </div>
-  );
-}
-
-function FolderMark({ open }: { open: boolean }) {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-      className={open ? "text-accent" : "text-muted"}
-    >
-      <path
-        d="M2.5 5.25h3.1l.85 1.2H13.5v6.05a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5V5.25Z"
-        stroke="currentColor"
-        strokeWidth="1.2"
-      />
-      <path
-        d="M2.5 5.25V4.4c0-.28.22-.5.5-.5h3.05l.7.85"
-        stroke="currentColor"
-        strokeWidth="1.2"
-      />
-    </svg>
   );
 }
