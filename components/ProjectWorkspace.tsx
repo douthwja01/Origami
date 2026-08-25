@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode, Suspense } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ProjectForm } from "@/components/ProjectForm";
 import { VaultExplorer } from "@/components/VaultExplorer";
@@ -35,6 +36,9 @@ export function ProjectWorkspace({ id }: { id: string }) {
   }, [load]);
 
   const project = data?.project;
+  const parent = data?.ancestors.at(-1);
+  const backHref = parent ? `/projects/${parent.id}` : "/";
+  const backLabel = parent ? parent.code : "Workshop";
 
   async function archive() {
     if (!project) return;
@@ -75,22 +79,43 @@ export function ProjectWorkspace({ id }: { id: string }) {
         {project ? (
           <>
             <header className="mb-4 flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-[12px] text-muted">
-                    {project.code}
-                  </span>
-                  <span className={`status-dot ${project.status}`} />
-                  <span className="text-[12px] text-muted">
-                    {statusLabel(project.status)}
-                  </span>
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex shrink-0 flex-col overflow-hidden rounded-md border border-line">
+                  <Link
+                    href="/"
+                    title="Index"
+                    className="inline-flex h-8 items-center gap-1.5 border-b border-line px-2.5 text-[12px] text-muted hover:bg-overlay hover:text-ink"
+                  >
+                    <IconIndex />
+                    Index
+                  </Link>
+                  <Link
+                    href={backHref}
+                    title={`Back to ${backLabel}`}
+                    aria-label={`Back to ${backLabel}`}
+                    className="inline-flex h-8 items-center gap-1.5 px-2.5 text-[12px] text-muted hover:bg-overlay hover:text-ink"
+                  >
+                    <IconBack />
+                    Back
+                  </Link>
                 </div>
-                <h1 className="mt-1 text-[22px] font-medium tracking-tight">
-                  {project.title}
-                </h1>
-                <p className="text-[13px] text-muted">
-                  Started {formatDate(project.startDate)}
-                </p>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-[12px] text-muted">
+                      {project.code}
+                    </span>
+                    <span className={`status-dot ${project.status}`} />
+                    <span className="text-[12px] text-muted">
+                      {statusLabel(project.status)}
+                    </span>
+                  </div>
+                  <h1 className="mt-1 text-[22px] font-medium tracking-tight">
+                    {project.title}
+                  </h1>
+                  <p className="text-[13px] text-muted">
+                    Started {formatDate(project.startDate)}
+                  </p>
+                </div>
               </div>
               <div className="flex flex-wrap gap-2">
                 <IconButton label="Edit" onClick={() => setEditing(true)}>
@@ -123,7 +148,7 @@ export function ProjectWorkspace({ id }: { id: string }) {
               </div>
             </header>
 
-            <div className="min-h-0 flex-1 overflow-auto">
+            <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
               <Suspense
                 fallback={
                   <p className="px-3 py-6 text-[13px] text-muted">Loading vault…</p>
@@ -225,14 +250,38 @@ function IconButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      title={label}
-      aria-label={label}
-      className={`inline-flex h-8 w-8 items-center justify-center rounded-md border border-line hover:border-accent disabled:opacity-50 ${
+      className={`inline-flex h-8 items-center gap-1.5 rounded-md border border-line px-2.5 text-[12px] hover:border-accent disabled:opacity-50 ${
         danger ? "text-accent" : "text-muted hover:text-ink"
       }`}
     >
       {children}
+      {label}
     </button>
+  );
+}
+
+function IconIndex() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="0.8" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="9" y="2.5" width="4.5" height="4.5" rx="0.8" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="2.5" y="9" width="4.5" height="4.5" rx="0.8" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="9" y="9" width="4.5" height="4.5" rx="0.8" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+function IconBack() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M10 3.2 5.2 8 10 12.8"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

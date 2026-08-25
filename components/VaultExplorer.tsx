@@ -216,27 +216,22 @@ export function VaultExplorer({
   }
 
   return (
-    <div
-      className={
-        tab === "overview"
-          ? "flex flex-col gap-3 pb-4"
-          : "flex h-full min-h-0 flex-col"
-      }
-    >
+    <div className="flex h-full min-h-0 flex-col gap-4">
+      <nav className="flex h-10 shrink-0 items-end gap-1 overflow-x-auto overflow-y-hidden shadow-[inset_0_-1px_0_0_var(--color-line)]">
+        <VaultTabs
+          tab={tab}
+          counts={counts}
+          nestedCount={nested.length}
+          dropTarget={dropTarget}
+          onOpenTab={openTab}
+          allowDrop={allowDrop}
+          handleDrop={handleDrop}
+          setDropTarget={setDropTarget}
+        />
+      </nav>
+
       {tab === "overview" ? (
-        <>
-          <nav className="flex shrink-0 items-end gap-1 overflow-x-auto rounded-xl border border-line bg-raised px-2 md:hidden">
-            <MobileVaultTabs
-              tab={tab}
-              counts={counts}
-              nestedCount={nested.length}
-              dropTarget={dropTarget}
-              onOpenTab={openTab}
-              allowDrop={allowDrop}
-              handleDrop={handleDrop}
-              setDropTarget={setDropTarget}
-            />
-          </nav>
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto">
           {error ? (
             <p className="text-[12px] text-accent">{error}</p>
           ) : null}
@@ -259,22 +254,9 @@ export function VaultExplorer({
             }}
           />
           <ChildProjectsCard nested={nested} onNewChild={onNewChild} />
-        </>
+        </div>
       ) : (
-      <div className="flex h-full min-h-0 min-h-[32rem] flex-1 flex-col overflow-hidden rounded-xl border border-line bg-raised">
-      <nav className="flex shrink-0 items-end gap-1 overflow-x-auto border-b border-line px-2 md:hidden">
-            <MobileVaultTabs
-              tab={tab}
-              counts={counts}
-              nestedCount={nested.length}
-              dropTarget={dropTarget}
-              onOpenTab={openTab}
-              allowDrop={allowDrop}
-              handleDrop={handleDrop}
-              setDropTarget={setDropTarget}
-            />
-      </nav>
-
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-raised">
         <header className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2">
           <div className="min-w-0 flex-1 text-[12px] text-muted">
             {tab === "nested" ? "Nested projects" : kindLabel(tab)}
@@ -528,7 +510,7 @@ function Tab({
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
-      className={`-mb-px flex shrink-0 items-center gap-2 border-b-2 px-3 py-2.5 text-[13px] ${
+      className={`flex h-10 shrink-0 items-center gap-2 border-b-2 px-3 text-[13px] ${
         active
           ? "border-accent text-ink"
           : "border-transparent text-muted hover:text-ink"
@@ -542,7 +524,7 @@ function Tab({
   );
 }
 
-function MobileVaultTabs({
+function VaultTabs({
   tab,
   counts,
   nestedCount,

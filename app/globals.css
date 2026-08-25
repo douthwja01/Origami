@@ -58,6 +58,10 @@ a {
   overflow: hidden;
 }
 
+.app-frame.wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 @media (max-width: 840px) {
   .app-frame {
     grid-template-columns: 1fr;

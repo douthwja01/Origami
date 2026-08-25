@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ProjectsProvider } from "@/components/ProjectsContext";
@@ -16,8 +16,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [creating, setCreating] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const projectId = projectIdFromPath(pathname);
   const onSettings = pathname.startsWith("/settings");
+  const showSidebar = !projectId || sidebarOpen;
+
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [projectId]);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -27,8 +33,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <ProjectsProvider>
-      <div className="app-frame">
-        <aside className="hidden h-dvh min-h-0 flex-col overflow-hidden border-r border-line bg-raised md:flex">
+      <div className={`app-frame ${showSidebar ? "" : "wide"}`}>
+        <aside
+          className={`h-dvh min-h-0 flex-col overflow-hidden border-r border-line bg-raised ${
+            showSidebar ? "hidden md:flex" : "hidden"
+          }`}
+        >
           <div className="flex items-center gap-2.5 border-b border-line px-4 py-4">
             <Link href="/" className="flex items-center gap-2.5">
               <span className="fold h-8 w-8 rounded-md" />
@@ -46,14 +56,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             </Link>
           </div>
-          {onSettings ? null : (
+          {onSettings || projectId ? null : (
             <div className="border-b border-line px-3 py-3">
               <button
                 type="button"
                 onClick={() => setCreating(true)}
                 className="w-full rounded-md bg-accent px-3 py-2 text-left text-[13px] font-medium text-canvas hover:bg-accent-dim"
               >
-                {projectId ? "New nested project" : "New project"}
+                New project
               </button>
             </div>
           )}
@@ -73,12 +83,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </aside>
         <div className="flex h-dvh min-h-0 min-w-0 flex-col overflow-hidden bg-canvas">
           <div className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-2.5">
-            <div className="flex shrink-0 items-center gap-2 md:hidden">
+            <div
+              className={`flex shrink-0 items-center gap-2 ${
+                showSidebar ? "md:hidden" : ""
+              }`}
+            >
               <Link href="/" className="flex items-center gap-2">
                 <span className="fold h-7 w-7 rounded-md" />
                 <span className="text-[13px] tracking-[0.16em]">ORIGAMI</span>
               </Link>
-              {onSettings ? null : (
+              {onSettings || projectId ? null : (
                 <button
                   type="button"
                   onClick={() => setCreating(true)}
@@ -88,6 +102,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </button>
               )}
             </div>
+            {projectId ? (
+              <button
+                type="button"
+                title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+                aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+                aria-pressed={sidebarOpen}
+                onClick={() => setSidebarOpen((open) => !open)}
+                className={`hidden h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-overlay hover:text-ink md:inline-flex ${
+                  sidebarOpen ? "bg-overlay text-ink" : "text-muted"
+                }`}
+              >
+                <IconSidebar />
+              </button>
+            ) : null}
             <ProjectBreadcrumbs />
             <div className="ml-auto flex shrink-0 items-center gap-1">
               <SettingsMenu />
@@ -100,16 +128,35 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </button>
             </div>
           </div>
-          <div className="min-h-0 flex-1 overflow-auto">{children}</div>
+          <div
+            className={`min-h-0 flex-1 ${
+              projectId ? "overflow-hidden" : "overflow-auto"
+            }`}
+          >
+            {children}
+          </div>
         </div>
       </div>
       {creating ? (
-        <ProjectForm
-          title={projectId ? "New nested project" : "New project"}
-          defaultParentId={projectId}
-          onClose={() => setCreating(false)}
-        />
+        <ProjectForm title="New project" onClose={() => setCreating(false)} />
       ) : null}
     </ProjectsProvider>
+  );
+}
+
+function IconSidebar() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect
+        x="2.5"
+        y="2.5"
+        width="11"
+        height="11"
+        rx="1.5"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+      <path d="M6.5 2.5v11" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
   );
 }
