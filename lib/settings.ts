@@ -1,5 +1,10 @@
 export const SETTINGS_NAV = [
   {
+    href: "/settings/themes",
+    label: "Themes",
+    description: "Assign a visual theme without changing layout",
+  },
+  {
     href: "/settings/backups",
     label: "Backups",
     description: "Schedule project archives and download a full vault snapshot",

@@ -94,6 +94,7 @@ export const appSettings = pgTable("app_settings", {
   backupNestFolders: boolean("backup_nest_folders").notNull().default(false),
   backupLastRunAt: timestamp("backup_last_run_at", { withTimezone: true }),
   backupLastSummary: text("backup_last_summary"),
+  theme: text("theme").notNull().default("workshop"),
 });
 
 export const projectBackups = pgTable(

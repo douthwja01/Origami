@@ -50,6 +50,13 @@
       "when": 1787669400000,
       "tag": "0006_backup_retention_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787691950928,
+      "tag": "0007_theme",
+      "breakpoints": true
     }
   ]
 }
