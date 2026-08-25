@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { ProjectForm } from "@/components/ProjectForm";
 import { VaultExplorer } from "@/components/VaultExplorer";
@@ -70,7 +70,7 @@ export function ProjectWorkspace({ id }: { id: string }) {
 
   return (
     <>
-      <main className="flex h-full min-h-0 flex-col px-5 py-4 lg:px-8">
+      <main className="flex h-full min-h-0 flex-col overflow-hidden px-5 py-4 lg:px-8">
         {error && !data ? <p className="text-accent">{error}</p> : null}
         {project ? (
           <>
@@ -123,16 +123,22 @@ export function ProjectWorkspace({ id }: { id: string }) {
               </div>
             </header>
 
-            <div className="min-h-0 flex-1">
-              <VaultExplorer
-                projectId={project.id}
-                assets={data?.assets ?? []}
-                nested={data?.children ?? []}
-                onChanged={async () => {
-                  await Promise.all([load(), refresh()]);
-                }}
-                onNewChild={() => setCreatingChild(true)}
-              />
+            <div className="min-h-0 flex-1 overflow-auto">
+              <Suspense
+                fallback={
+                  <p className="px-3 py-6 text-[13px] text-muted">Loading vault…</p>
+                }
+              >
+                <VaultExplorer
+                  projectId={project.id}
+                  assets={data?.assets ?? []}
+                  nested={data?.children ?? []}
+                  onChanged={async () => {
+                    await Promise.all([load(), refresh()]);
+                  }}
+                  onNewChild={() => setCreatingChild(true)}
+                />
+              </Suspense>
             </div>
           </>
         ) : !error ? (

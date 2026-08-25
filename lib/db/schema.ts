@@ -1,7 +1,9 @@
 import {
   bigint,
+  boolean,
   date,
   index,
+  integer,
   pgEnum,
   type AnyPgColumn,
   pgSequence,
@@ -44,6 +46,10 @@ export const projects = pgTable(
     parentId: uuid("parent_id").references((): AnyPgColumn => projects.id, {
       onDelete: "restrict",
     }),
+    checksum: text("checksum"),
+    checksumAt: timestamp("checksum_at", { withTimezone: true }),
+    lastBackupChecksum: text("last_backup_checksum"),
+    lastBackupAt: timestamp("last_backup_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -69,9 +75,45 @@ export const assets = pgTable(
     mimeType: text("mime_type").notNull(),
     sizeBytes: bigint("size_bytes", { mode: "number" }).notNull(),
     storagePath: text("storage_path").notNull(),
+    contentHash: text("content_hash"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
   (table) => [index("assets_project_id_idx").on(table.projectId)],
+);
+
+export const appSettings = pgTable("app_settings", {
+  id: integer("id").primaryKey().default(1),
+  backupEnabled: boolean("backup_enabled").notNull().default(false),
+  backupIntervalCount: integer("backup_interval_count").notNull().default(1),
+  backupIntervalUnit: text("backup_interval_unit").notNull().default("week"),
+  backupRetentionCount: integer("backup_retention_count").notNull().default(4),
+  backupRetentionUnit: text("backup_retention_unit").notNull().default("week"),
+  backupRetentionMode: text("backup_retention_mode").notNull().default("age"),
+  backupNestFolders: boolean("backup_nest_folders").notNull().default(false),
+  backupLastRunAt: timestamp("backup_last_run_at", { withTimezone: true }),
+  backupLastSummary: text("backup_last_summary"),
+});
+
+export const projectBackups = pgTable(
+  "project_backups",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    code: text("code").notNull(),
+    checksum: text("checksum").notNull(),
+    filename: text("filename").notNull(),
+    storagePath: text("storage_path").notNull(),
+    sizeBytes: bigint("size_bytes", { mode: "number" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("project_backups_project_id_idx").on(table.projectId),
+    index("project_backups_created_at_idx").on(table.createdAt),
+  ],
 );

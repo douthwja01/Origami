@@ -38,7 +38,12 @@ npm run dev
 | `ORIGAMI_PASSWORD_HASH` | bcrypt hash; preferred in production |
 | `ORIGAMI_VAULT_DIR` | Where uploaded files are stored (inside the process / container) |
 | `ORIGAMI_VAULT_HOST` | Host folder bind-mounted as the vault when using Docker Compose (default `./data/vault`) |
+| `ORIGAMI_BACKUP_DIR` | Where scheduled project backups are written (inside the process / container) |
+| `ORIGAMI_BACKUP_HOST` | Host folder bind-mounted for scheduled backups when using Docker Compose (default `./data/backups`) |
+| `ORIGAMI_LOG_DIR` | Where application logs are written (inside the process / container) |
+| `ORIGAMI_LOG_HOST` | Host folder bind-mounted for logs when using Docker Compose (default `./logs`) |
 | `ORIGAMI_MAX_UPLOAD_MB` | Upload cap (default 512) |
+| `TZ` | Timezone for backup filenames (Docker Compose default `Europe/London`) |
 
 Hash a production password:
 
@@ -65,12 +70,12 @@ origami.example.com {
 
 4. Run `docker compose up -d --build`.
 
-Postgres data lives in the `pgdata` Docker volume. Vault files are bind-mounted from `./data/vault` on the host (override with `ORIGAMI_VAULT_HOST` in `.env`). Back both up.
+Postgres data lives in the `pgdata` Docker volume. Vault files are bind-mounted from `./data/vault` on the host (override with `ORIGAMI_VAULT_HOST` in `.env`). Scheduled project backups go to `./data/backups` (override with `ORIGAMI_BACKUP_HOST`). Application logs go to `./logs` (override with `ORIGAMI_LOG_HOST`). Back the database, vault, and backups up.
 
 ## Projects
 
 - Top-level IDs are assigned as `PROJ-001`, `PROJ-002`, … Nested projects use dotted IDs (`001.1`, `001.1.1`, …). IDs can be edited.
-- Statuses: Planned, Active, On hold, Done, Archived.
+- Statuses: Planned, Active, On hold, Done, Archived. Archiving writes a backup immediately and excludes the project from later scheduled backups. Retention can keep a fixed number of backups per project, or drop archives older than a week, month, year, or decade. At least one backup per project is always kept.
 - A project can nest under another. Moving a project under itself or a descendant is blocked.
 - Deleting a project that has children or files requires **Delete with nested + files**.
 

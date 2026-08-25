@@ -76,12 +76,21 @@ function matchesQuery(q: string) {
   };
 }
 
-export function ProjectTree() {
+export function ProjectTree({
+  roots,
+  searchPlaceholder = "Search projects",
+  emptyLabel = "No projects yet.",
+}: {
+  roots?: ProjectTreeNode[];
+  searchPlaceholder?: string;
+  emptyLabel?: string;
+} = {}) {
   const { tree, loading, error } = useProjects();
   const [query, setQuery] = useState("");
+  const source = roots ?? tree;
   const filtered = useMemo(
-    () => tree.filter(matchesQuery(query.trim().toLowerCase())),
-    [tree, query],
+    () => source.filter(matchesQuery(query.trim().toLowerCase())),
+    [source, query],
   );
 
   return (
@@ -90,7 +99,7 @@ export function ProjectTree() {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search projects"
+          placeholder={searchPlaceholder}
           className="w-full rounded-md border border-line bg-canvas px-2.5 py-1.5 text-[13px] text-ink outline-none placeholder:text-muted focus:border-accent"
         />
       </div>
@@ -100,7 +109,7 @@ export function ProjectTree() {
         ) : error ? (
           <p className="px-2 text-[13px] text-accent">{error}</p>
         ) : filtered.length === 0 ? (
-          <p className="px-2 text-[13px] text-muted">No projects yet.</p>
+          <p className="px-2 text-[13px] text-muted">{emptyLabel}</p>
         ) : (
           filtered.map((node) => (
             <TreeNode key={node.id} node={node} query={query} />

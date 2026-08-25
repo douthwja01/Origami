@@ -62,6 +62,7 @@ export async function POST(request: Request, ctx: Ctx) {
       mimeType,
       sizeBytes,
       storagePath: written.storagePath,
+      contentHash: written.sha256,
     });
     return json({ asset }, 201);
   } catch (error) {

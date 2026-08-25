@@ -42,6 +42,18 @@ export function buildTree(projects: ProjectDTO[]): ProjectTreeNode[] {
   return roots;
 }
 
+export function findTreeNode(
+  nodes: ProjectTreeNode[],
+  id: string,
+): ProjectTreeNode | undefined {
+  for (const node of nodes) {
+    if (node.id === id) return node;
+    const nested = findTreeNode(node.children, id);
+    if (nested) return nested;
+  }
+  return undefined;
+}
+
 export function descendantIdSet(projects: ProjectDTO[], rootId: string): Set<string> {
   const children = new Map<string, string[]>();
   for (const project of projects) {

@@ -1,4 +1,5 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { backupArchivedProject } from "@/lib/backup";
 import { getDb } from "@/lib/db";
 import { assets, projects } from "@/lib/db/schema";
 import {
@@ -41,6 +42,7 @@ export function toAssetDTO(row: typeof assets.$inferSelect): AssetDTO {
     filename: row.filename,
     mimeType: row.mimeType,
     sizeBytes: Number(row.sizeBytes),
+    contentHash: row.contentHash,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -148,6 +150,9 @@ export async function createProject(input: {
       parentId: input.parentId,
     })
     .returning();
+  if (row.status === "archived") {
+    await backupArchivedProject(row);
+  }
   return toProjectDTO(row, 0, emptyKinds());
 }
 
@@ -222,6 +227,10 @@ export async function updateProject(
     })
     .where(eq(projects.id, id))
     .returning();
+
+  if (existing.status !== "archived" && row.status === "archived") {
+    await backupArchivedProject(row);
+  }
 
   const all = await listProjects();
   const dto = all.find((p) => p.id === row.id);
@@ -323,6 +332,7 @@ export async function insertAsset(input: {
   mimeType: string;
   sizeBytes: number;
   storagePath: string;
+  contentHash: string;
 }) {
   const db = getDb();
   const [row] = await db.insert(assets).values(input).returning();

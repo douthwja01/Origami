@@ -2,9 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AssetPreview } from "@/components/AssetPreview";
-import { formatBytes, formatDate, kindLabel } from "@/lib/format";
+import { formatBytes, formatDate, kindLabel, statusLabel } from "@/lib/format";
 import { mimeFromFilename } from "@/lib/kinds";
+import {
+  parseProjectView,
+  projectViewHref,
+  type ProjectView,
+} from "@/lib/project-view";
 import {
   ASSET_KINDS,
   type AssetDTO,
@@ -14,7 +20,7 @@ import {
 
 const ASSET_DRAG = "application/x-origami-asset";
 
-type TabId = "overview" | AssetKind | "nested";
+type TabId = ProjectView;
 
 type Props = {
   projectId: string;
@@ -31,8 +37,10 @@ export function VaultExplorer({
   onChanged,
   onNewChild,
 }: Props) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [tab, setTab] = useState<TabId>("overview");
+  const tab = parseProjectView(searchParams.get("view"));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -103,8 +111,8 @@ export function VaultExplorer({
     }
     setUploading(null);
     if (last) {
-      setTab(last.kind);
       setSelectedId(last.id);
+      openTab(last.kind);
     }
     await onChanged();
     return last;
@@ -124,8 +132,8 @@ export function VaultExplorer({
       setError(data.error || "Could not move file");
       return;
     }
-    setTab(kind);
     setSelectedId(assetId);
+    openTab(kind);
     await onChanged();
   }
 
@@ -185,7 +193,7 @@ export function VaultExplorer({
       return;
     }
     if (event.dataTransfer.files.length) {
-      setTab(target);
+      openTab(target);
       void uploadFiles(event.dataTransfer.files, target);
     }
   }
@@ -202,44 +210,71 @@ export function VaultExplorer({
   }
 
   function openTab(next: TabId) {
-    setTab(next);
-    if (next !== kindFolder) setSelectedId(null);
+    if (tab !== next) {
+      router.push(projectViewHref(projectId, next), { scroll: false });
+    }
   }
 
   return (
-    <div className="flex h-full min-h-[32rem] flex-col overflow-hidden rounded-xl border border-line bg-raised">
-      <nav className="flex shrink-0 items-end gap-1 overflow-x-auto border-b border-line px-2">
-        <Tab
-          label="Overview"
-          active={tab === "overview"}
-          onClick={() => openTab("overview")}
-        />
-        {ASSET_KINDS.map((kind) => (
-          <Tab
-            key={kind}
-            label={kindLabel(kind)}
-            count={counts[kind]}
-            active={tab === kind}
-            dropActive={dropTarget === kind}
-            onClick={() => openTab(kind)}
-            onDragOver={(event) => allowDrop(kind, event)}
-            onDragLeave={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget as Node)) {
-                setDropTarget((current) => (current === kind ? null : current));
-              }
-            }}
-            onDrop={(event) => handleDrop(kind, event)}
+    <div
+      className={
+        tab === "overview"
+          ? "flex flex-col gap-3 pb-4"
+          : "flex h-full min-h-0 flex-col"
+      }
+    >
+      {tab === "overview" ? (
+        <>
+          <nav className="flex shrink-0 items-end gap-1 overflow-x-auto rounded-xl border border-line bg-raised px-2 md:hidden">
+            <MobileVaultTabs
+              tab={tab}
+              counts={counts}
+              nestedCount={nested.length}
+              dropTarget={dropTarget}
+              onOpenTab={openTab}
+              allowDrop={allowDrop}
+              handleDrop={handleDrop}
+              setDropTarget={setDropTarget}
+            />
+          </nav>
+          {error ? (
+            <p className="text-[12px] text-accent">{error}</p>
+          ) : null}
+          {uploading ? (
+            <p className="text-[12px] text-muted">Uploading {uploading}…</p>
+          ) : null}
+          <StatisticsCard
+            counts={counts}
+            dropTarget={dropTarget}
+            onOpenTab={openTab}
+            allowDrop={allowDrop}
+            handleDrop={handleDrop}
+            setDropTarget={setDropTarget}
           />
-        ))}
-        <Tab
-          label="Projects"
-          count={nested.length}
-          active={tab === "nested"}
-          onClick={() => openTab("nested")}
-        />
+          <RecentFilesCard
+            recent={recent}
+            onOpenFile={(asset) => {
+              setSelectedId(asset.id);
+              openTab(asset.kind);
+            }}
+          />
+          <ChildProjectsCard nested={nested} onNewChild={onNewChild} />
+        </>
+      ) : (
+      <div className="flex h-full min-h-0 min-h-[32rem] flex-1 flex-col overflow-hidden rounded-xl border border-line bg-raised">
+      <nav className="flex shrink-0 items-end gap-1 overflow-x-auto border-b border-line px-2 md:hidden">
+            <MobileVaultTabs
+              tab={tab}
+              counts={counts}
+              nestedCount={nested.length}
+              dropTarget={dropTarget}
+              onOpenTab={openTab}
+              allowDrop={allowDrop}
+              handleDrop={handleDrop}
+              setDropTarget={setDropTarget}
+            />
       </nav>
 
-      {tab !== "overview" ? (
         <header className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2">
           <div className="min-w-0 flex-1 text-[12px] text-muted">
             {tab === "nested" ? "Nested projects" : kindLabel(tab)}
@@ -295,7 +330,6 @@ export function VaultExplorer({
             }}
           />
         </header>
-      ) : null}
 
       {error ? (
         <p className="shrink-0 px-3 py-2 text-[12px] text-accent">{error}</p>
@@ -307,23 +341,7 @@ export function VaultExplorer({
       ) : null}
 
       <div className="min-h-0 flex-1 overflow-hidden">
-        {tab === "overview" ? (
-          <Overview
-            counts={counts}
-            nested={nested}
-            recent={recent}
-            dropTarget={dropTarget}
-            onOpenTab={openTab}
-            onOpenFile={(asset) => {
-              setTab(asset.kind);
-              setSelectedId(asset.id);
-            }}
-            onNewChild={onNewChild}
-            allowDrop={allowDrop}
-            handleDrop={handleDrop}
-            setDropTarget={setDropTarget}
-          />
-        ) : tab === "nested" ? (
+        {tab === "nested" ? (
           <NestedList nested={nested} />
         ) : (
           <div className="grid h-full min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
@@ -410,6 +428,8 @@ export function VaultExplorer({
           </div>
         )}
       </div>
+      </div>
+      )}
 
       {creating && kindFolder ? (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/55 p-4 pt-[18vh]">
@@ -522,25 +542,70 @@ function Tab({
   );
 }
 
-function Overview({
+function MobileVaultTabs({
+  tab,
   counts,
-  nested,
-  recent,
+  nestedCount,
   dropTarget,
   onOpenTab,
-  onOpenFile,
-  onNewChild,
+  allowDrop,
+  handleDrop,
+  setDropTarget,
+}: {
+  tab: TabId;
+  counts: Record<AssetKind, number>;
+  nestedCount: number;
+  dropTarget: string | null;
+  onOpenTab: (next: TabId) => void;
+  allowDrop: (target: AssetKind, event: React.DragEvent) => void;
+  handleDrop: (target: AssetKind, event: React.DragEvent) => void;
+  setDropTarget: (value: string | null | ((current: string | null) => string | null)) => void;
+}) {
+  return (
+    <>
+      <Tab
+        label="Overview"
+        active={tab === "overview"}
+        onClick={() => onOpenTab("overview")}
+      />
+      {ASSET_KINDS.map((kind) => (
+        <Tab
+          key={kind}
+          label={kindLabel(kind)}
+          count={counts[kind]}
+          active={tab === kind}
+          dropActive={dropTarget === kind}
+          onClick={() => onOpenTab(kind)}
+          onDragOver={(event) => allowDrop(kind, event)}
+          onDragLeave={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+              setDropTarget((current) => (current === kind ? null : current));
+            }
+          }}
+          onDrop={(event) => handleDrop(kind, event)}
+        />
+      ))}
+      <Tab
+        label="Projects"
+        count={nestedCount}
+        active={tab === "nested"}
+        onClick={() => onOpenTab("nested")}
+      />
+    </>
+  );
+}
+
+function StatisticsCard({
+  counts,
+  dropTarget,
+  onOpenTab,
   allowDrop,
   handleDrop,
   setDropTarget,
 }: {
   counts: Record<AssetKind, number>;
-  nested: ProjectDTO[];
-  recent: AssetDTO[];
   dropTarget: string | null;
   onOpenTab: (tab: TabId) => void;
-  onOpenFile: (asset: AssetDTO) => void;
-  onNewChild: () => void;
   allowDrop: (target: AssetKind, event: React.DragEvent) => void;
   handleDrop: (target: AssetKind, event: React.DragEvent) => void;
   setDropTarget: (value: string | null | ((current: string | null) => string | null)) => void;
@@ -548,40 +613,100 @@ function Overview({
   const totalFiles = ASSET_KINDS.reduce((sum, kind) => sum + counts[kind], 0);
 
   return (
-    <div className="h-full overflow-auto p-4 lg:p-5">
-      <p className="mb-4 text-[13px] text-muted">
-        {totalFiles} {totalFiles === 1 ? "file" : "files"}
-        {" · "}
-        {nested.length} nested {nested.length === 1 ? "project" : "projects"}
-      </p>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {ASSET_KINDS.map((kind) => (
-          <button
-            key={kind}
-            type="button"
-            onClick={() => onOpenTab(kind)}
-            onDragOver={(event) => allowDrop(kind, event)}
-            onDragLeave={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget as Node)) {
-                setDropTarget((current) => (current === kind ? null : current));
-              }
-            }}
-            onDrop={(event) => handleDrop(kind, event)}
-            className={`rounded-lg border px-3 py-3 text-left hover:border-accent ${
-              dropTarget === kind ? "border-accent bg-overlay" : "border-line"
-            }`}
-          >
-            <div className="text-[13px] text-ink">{kindLabel(kind)}</div>
-            <div className="mt-1 font-mono text-[12px] text-muted">
-              {counts[kind]} {counts[kind] === 1 ? "file" : "files"}
-            </div>
-          </button>
-        ))}
+    <section className="shrink-0 rounded-xl border border-line bg-raised">
+      <div className="flex items-baseline justify-between gap-2 px-4 py-3">
+        <h2 className="text-[13px] font-medium">Statistics</h2>
+        <span className="font-mono text-[11px] text-muted">
+          {totalFiles} {totalFiles === 1 ? "file" : "files"}
+        </span>
       </div>
+      <ul className="divide-y divide-line border-t border-line">
+        {ASSET_KINDS.map((kind) => (
+          <li key={kind}>
+            <button
+              type="button"
+              onClick={() => onOpenTab(kind)}
+              onDragOver={(event) => allowDrop(kind, event)}
+              onDragLeave={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                  setDropTarget((current) =>
+                    current === kind ? null : current,
+                  );
+                }
+              }}
+              onDrop={(event) => handleDrop(kind, event)}
+              className={`flex w-full items-center justify-between px-4 py-2.5 text-left hover:bg-overlay/60 ${
+                dropTarget === kind ? "bg-overlay" : ""
+              }`}
+            >
+              <span className="text-[13px] text-ink">{kindLabel(kind)}</span>
+              <span className="font-mono text-[12px] text-muted">
+                {counts[kind]}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
-      <section className="mt-6">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-[13px] font-medium">Nested projects</h2>
+function RecentFilesCard({
+  recent,
+  onOpenFile,
+}: {
+  recent: AssetDTO[];
+  onOpenFile: (asset: AssetDTO) => void;
+}) {
+  return (
+    <section className="shrink-0 rounded-xl border border-line bg-raised">
+      <div className="px-4 py-3">
+        <h2 className="text-[13px] font-medium">Recent files</h2>
+      </div>
+      {recent.length === 0 ? (
+        <p className="border-t border-line px-4 py-3 text-[13px] text-muted">
+          Nothing in the vault yet. Open a folder tab to upload.
+        </p>
+      ) : (
+        <ul className="divide-y divide-line border-t border-line">
+          {recent.map((asset) => (
+            <li key={asset.id}>
+              <button
+                type="button"
+                onClick={() => onOpenFile(asset)}
+                className="flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-overlay/60"
+              >
+                <span className="min-w-0 flex-1 truncate text-[13px]">
+                  {asset.filename}
+                </span>
+                <span className="shrink-0 text-[12px] text-muted">
+                  {kindLabel(asset.kind)}
+                </span>
+                <span className="shrink-0 font-mono text-[11px] text-muted">
+                  {formatBytes(asset.sizeBytes)}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function ChildProjectsCard({
+  nested,
+  onNewChild,
+}: {
+  nested: ProjectDTO[];
+  onNewChild: () => void;
+}) {
+  return (
+    <section className="shrink-0 rounded-xl border border-line bg-raised">
+      <div className="flex items-center justify-between gap-2 px-4 py-3">
+        <h2 className="text-[13px] font-medium">Child projects</h2>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[11px] text-muted">{nested.length}</span>
           <button
             type="button"
             onClick={onNewChild}
@@ -590,61 +715,30 @@ function Overview({
             New
           </button>
         </div>
-        {nested.length === 0 ? (
-          <p className="text-[13px] text-muted">No nested projects yet.</p>
-        ) : (
-          <ul className="divide-y divide-line rounded-lg border border-line">
-            {nested.map((child) => (
-              <li key={child.id}>
-                <Link
-                  href={`/projects/${child.id}`}
-                  className="flex items-center gap-2 px-3 py-2 hover:bg-overlay/60"
-                >
-                  <span className={`status-dot ${child.status}`} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px]">{child.title}</span>
-                    <span className="block font-mono text-[11px] text-muted">
-                      {child.code} · {formatDate(child.startDate)}
-                    </span>
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="mt-6">
-        <h2 className="mb-2 text-[13px] font-medium">Recent files</h2>
-        {recent.length === 0 ? (
-          <p className="text-[13px] text-muted">
-            Nothing in the vault yet. Open a folder tab to upload.
-          </p>
-        ) : (
-          <ul className="divide-y divide-line rounded-lg border border-line">
-            {recent.map((asset) => (
-              <li key={asset.id}>
-                <button
-                  type="button"
-                  onClick={() => onOpenFile(asset)}
-                  className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-overlay/60"
-                >
-                  <span className="min-w-0 flex-1 truncate text-[13px]">
-                    {asset.filename}
-                  </span>
-                  <span className="shrink-0 text-[12px] text-muted">
-                    {kindLabel(asset.kind)}
-                  </span>
-                  <span className="shrink-0 font-mono text-[11px] text-muted">
-                    {formatBytes(asset.sizeBytes)}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </div>
+      </div>
+      {nested.length === 0 ? (
+        <p className="border-t border-line px-4 py-3 text-[13px] text-muted">
+          No child projects yet.
+        </p>
+      ) : (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))] gap-2 border-t border-line p-3 lg:p-4">
+          {nested.map((child) => (
+            <Link
+              key={child.id}
+              href={`/projects/${child.id}`}
+              className="block rounded-lg border border-line bg-canvas px-3 py-2.5 hover:border-accent/50"
+            >
+              <div className="font-mono text-[11px] text-muted">{child.code}</div>
+              <div className="truncate text-[13px] text-ink">{child.title}</div>
+              <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted">
+                <span className={`status-dot ${child.status}`} />
+                {statusLabel(child.status)}
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

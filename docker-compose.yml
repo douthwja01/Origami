@@ -25,10 +25,18 @@ services:
       ORIGAMI_USER: admin
       ORIGAMI_PASSWORD: origami
       ORIGAMI_VAULT_DIR: /data/vault
+      ORIGAMI_BACKUP_DIR: /data/backups
+      ORIGAMI_LOG_DIR: /data/logs
+      ORIGAMI_LOG_HOST: ${ORIGAMI_LOG_HOST:-./logs}
       ORIGAMI_MAX_UPLOAD_MB: "512"
+      TZ: ${TZ:-Europe/London}
     volumes:
       # Host directory so uploads persist outside Docker. Override with ORIGAMI_VAULT_HOST.
       - ${ORIGAMI_VAULT_HOST:-./data/vault}:/data/vault
+      # Host directory for scheduled project backups. Override with ORIGAMI_BACKUP_HOST.
+      - ${ORIGAMI_BACKUP_HOST:-./data/backups}:/data/backups
+      # Host directory for application logs, separate from vault/backups. Override with ORIGAMI_LOG_HOST.
+      - ${ORIGAMI_LOG_HOST:-./logs}:/data/logs
     depends_on:
       db:
         condition: service_healthy

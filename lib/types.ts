@@ -45,6 +45,7 @@ export type AssetDTO = {
   filename: string;
   mimeType: string;
   sizeBytes: number;
+  contentHash: string | null;
   createdAt: string;
 };
 

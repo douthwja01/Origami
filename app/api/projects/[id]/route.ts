@@ -23,13 +23,13 @@ export async function GET(_request: Request, ctx: Ctx) {
   const project = all.find((p) => p.id === id);
   if (!project) return json({ error: "Project not found" }, 404);
 
-  const [ancestors, children, assets] = await Promise.all([
+  const [ancestors, children, assetList] = await Promise.all([
     ancestorsOf(id),
     childrenOf(id),
     listAssets(id),
   ]);
 
-  return json({ project, ancestors, children, assets });
+  return json({ project, ancestors, children, assets: assetList });
 }
 
 export async function PATCH(request: Request, ctx: Ctx) {

@@ -1,6 +1,7 @@
+import { createHash } from "node:crypto";
 import { mkdir, unlink, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { createWriteStream } from "node:fs";
+import { createReadStream, createWriteStream } from "node:fs";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
 
@@ -57,15 +58,18 @@ export async function writeVaultFile(
   assetId: string,
   filename: string,
   data: ReadableStream<Uint8Array> | Buffer,
-): Promise<{ storagePath: string; bytes: number }> {
+): Promise<{ storagePath: string; bytes: number; sha256: string }> {
   const dir = assetDir(projectId, assetId);
   await mkdir(dir, { recursive: true });
   const dest = assetFilePath(projectId, assetId, filename);
+  const hash = createHash("sha256");
   if (Buffer.isBuffer(data)) {
+    hash.update(data);
     await writeFile(dest, data);
     return {
       storagePath: relativeStoragePath(projectId, assetId, filename),
       bytes: data.length,
+      sha256: hash.digest("hex"),
     };
   }
   const nodeStream = Readable.fromWeb(
@@ -74,12 +78,23 @@ export async function writeVaultFile(
   let bytes = 0;
   nodeStream.on("data", (chunk: Buffer) => {
     bytes += chunk.length;
+    hash.update(chunk);
   });
   await pipeline(nodeStream, createWriteStream(dest));
   return {
     storagePath: relativeStoragePath(projectId, assetId, filename),
     bytes,
+    sha256: hash.digest("hex"),
   };
+}
+
+export async function hashFileSha256(absPath: string): Promise<string> {
+  const hash = createHash("sha256");
+  const stream = createReadStream(absPath);
+  for await (const chunk of stream) {
+    hash.update(chunk);
+  }
+  return hash.digest("hex");
 }
 
 export async function removeVaultFile(storagePath: string): Promise<void> {

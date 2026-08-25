@@ -2,7 +2,17 @@ export const SETTINGS_NAV = [
   {
     href: "/settings/backups",
     label: "Backups",
-    description: "Download project records and vault files",
+    description: "Schedule project archives and download a full vault snapshot",
+  },
+  {
+    href: "/settings/logs",
+    label: "Logs",
+    description: "Inspect recent application output and download a log snippet",
+  },
+  {
+    href: "/settings/account",
+    label: "Account",
+    description: "Signed-in user and how login credentials are configured",
   },
 ] as const;
 
