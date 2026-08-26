@@ -2,6 +2,8 @@ export const DEFAULT_VAULT_NAME = "Workshop";
 export const VAULT_NAME_MAX = 80;
 export const DEFAULT_MEDIA_BACKGROUND_OPACITY = 25;
 export const MEDIA_BACKGROUND_CYCLE_MS = 12_000;
+/** Crossfade length when cycling project background media. */
+export const MEDIA_BACKGROUND_CROSSFADE_MS = 3_000;
 export const MEDIA_BACKGROUND_OPACITY_MIN = 0;
 export const MEDIA_BACKGROUND_OPACITY_MAX = 100;
 

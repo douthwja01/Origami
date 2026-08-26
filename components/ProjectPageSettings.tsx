@@ -64,7 +64,7 @@ export function ProjectPageSettings({ project, onSaved }: Props) {
           <h2 className="text-[13px] font-medium">Background</h2>
           <p className="mt-1 text-[13px] text-muted">
             When enabled, previewable images and video from this project vault
-            sit behind the workspace. Cycling advances every 12 seconds.
+            sit behind the workspace. Cycling crossfades every 12 seconds.
           </p>
 
           <label className="mt-4 flex items-center gap-2 text-[13px]">
