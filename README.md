@@ -42,7 +42,7 @@ npm run dev
 | `ORIGAMI_BACKUP_HOST` | Host folder bind-mounted for scheduled backups when using Docker Compose (default `./data/backups`) |
 | `ORIGAMI_LOG_DIR` | Where application logs are written (inside the process / container) |
 | `ORIGAMI_LOG_HOST` | Host folder bind-mounted for logs when using Docker Compose (default `./logs`) |
-| `ORIGAMI_MAX_UPLOAD_MB` | Upload cap (default 512) |
+| `ORIGAMI_MAX_UPLOAD_MB` | Default and ceiling for per-file uploads in MB (default 10240 = 10 GB). Override in Settings → System; cannot exceed this value without changing the environment and restarting. |
 | `TZ` | Timezone for backup filenames (Docker Compose default `Europe/London`) |
 
 Hash a production password:

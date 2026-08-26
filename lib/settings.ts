@@ -10,6 +10,11 @@ export const SETTINGS_NAV = [
     description: "Vault name shown on the home screen and in navigation",
   },
   {
+    href: "/settings/system",
+    label: "System",
+    description: "Upload limits and other server defaults",
+  },
+  {
     href: "/settings/backups",
     label: "Backups",
     description: "Schedule project archives and download a full vault snapshot",

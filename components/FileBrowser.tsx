@@ -10,6 +10,7 @@ import {
   isUnderFolderPath,
   joinFolderPath,
 } from "@/lib/folder-path";
+import { uploadsFromDataTransfer } from "@/lib/drop-upload";
 import { mimeFromFilename } from "@/lib/kinds";
 import {
   firstTagSortKey,
@@ -321,8 +322,12 @@ export function FileBrowser({
   async function uploadFiles(files: FileList | File[], folderPath: string) {
     setError(null);
     let last: AssetDTO | null = null;
-    for (const file of Array.from(files)) {
-      setUploading(file.name);
+    const list = Array.from(files);
+    for (let i = 0; i < list.length; i += 1) {
+      const file = list[i];
+      setUploading(
+        list.length > 1 ? `${i + 1}/${list.length} ${file.name}` : file.name,
+      );
       const form = new FormData();
       form.append("file", file);
       form.append("folderPath", folderPath);
@@ -341,6 +346,87 @@ export function FileBrowser({
     if (last) setSelection({ type: "file", id: last.id });
     await onChanged();
     return last;
+  }
+
+  async function ensureFolderPath(folderPath: string) {
+    if (!folderPath) return true;
+    const parts = folderPath.split("/").filter(Boolean);
+    let parent = "";
+    for (const name of parts) {
+      const full = joinFolderPath(parent, name);
+      const already =
+        folderPaths.has(full) ||
+        folders.some((folder) => folder.path === full);
+      if (!already) {
+        const res = await fetch(`/api/projects/${projectId}/folders`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ parentPath: parent, name }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (res.status !== 409) {
+            setError(data.error || `Could not create folder ${full}`);
+            return false;
+          }
+        }
+      }
+      parent = full;
+    }
+    return true;
+  }
+
+  async function uploadDataTransfer(
+    dataTransfer: DataTransfer,
+    baseFolderPath: string,
+  ) {
+    setError(null);
+    setDropTarget(null);
+    const { uploads, folderPaths: neededFolders } =
+      await uploadsFromDataTransfer(dataTransfer, baseFolderPath);
+    if (uploads.length === 0 && neededFolders.length === 0) return;
+
+    for (const folderPath of neededFolders) {
+      setUploading(`Folder ${folderPath}`);
+      const ok = await ensureFolderPath(folderPath);
+      if (!ok) {
+        setUploading(null);
+        await onChanged();
+        return;
+      }
+    }
+
+    let last: AssetDTO | null = null;
+    for (let i = 0; i < uploads.length; i += 1) {
+      const item = uploads[i];
+      setUploading(
+        uploads.length > 1
+          ? `${i + 1}/${uploads.length} ${item.file.name}`
+          : item.file.name,
+      );
+      const form = new FormData();
+      form.append("file", item.file);
+      form.append("folderPath", item.folderPath);
+      const res = await fetch(`/api/projects/${projectId}/assets`, {
+        method: "POST",
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || `Failed to upload ${item.file.name}`);
+        break;
+      }
+      last = data.asset;
+    }
+    setUploading(null);
+    if (last) setSelection({ type: "file", id: last.id });
+    else if (neededFolders.length > 0) {
+      setSelection({
+        type: "folder",
+        path: neededFolders[neededFolders.length - 1],
+      });
+    }
+    await onChanged();
   }
 
   async function moveAsset(assetId: string, folderPath: string) {
@@ -449,8 +535,11 @@ export function FileBrowser({
       void moveAsset(assetId, folderPath);
       return;
     }
-    if (event.dataTransfer.files.length) {
-      void uploadFiles(event.dataTransfer.files, folderPath);
+    if (
+      event.dataTransfer.files.length > 0 ||
+      [...event.dataTransfer.types].includes("Files")
+    ) {
+      void uploadDataTransfer(event.dataTransfer, folderPath);
     }
   }
 
@@ -641,7 +730,7 @@ export function FileBrowser({
           </nav>
           <div className="min-h-0 flex-1 overflow-auto">
           {emptyTree ? (
-            <EmptyPane text="Empty folder. Use New folder / New file / Upload, or drop files here." />
+            <EmptyPane text="Empty folder. Use New folder / New file / Upload, or drop files and folders here." />
           ) : emptySearch ? (
             <EmptyPane text="No files or folders match this search." />
           ) : (

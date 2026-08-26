@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { json, isResponse, requireUser } from "@/lib/api";
 import { inferKind } from "@/lib/kinds";
 import { getProjectRow, insertAsset } from "@/lib/projects";
-import { maxUploadBytes, removeVaultFile, writeVaultFile } from "@/lib/vault";
+import { resolveMaxUploadBytes } from "@/lib/upload-settings";
+import { removeVaultFile, writeVaultFile } from "@/lib/vault";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -28,7 +29,7 @@ export async function POST(request: Request, ctx: Ctx) {
     return json({ error: "file is required" }, 400);
   }
 
-  const limit = maxUploadBytes();
+  const limit = await resolveMaxUploadBytes();
   if (file.size > limit) {
     return json(
       { error: `File exceeds the ${Math.round(limit / 1024 / 1024)} MB upload limit` },

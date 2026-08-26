@@ -17,11 +17,6 @@ function joinVault(...parts: string[]): string {
   return path.join(process.cwd(), "data", "vault", ...parts);
 }
 
-export function maxUploadBytes(): number {
-  const mb = Number(process.env.ORIGAMI_MAX_UPLOAD_MB || "512");
-  return (Number.isFinite(mb) && mb > 0 ? mb : 512) * 1024 * 1024;
-}
-
 export function safeFilename(name: string): string {
   const base = path.basename(name).replace(/[\u0000-\u001f\\/]/g, "_").trim();
   return base.length > 0 ? base.slice(0, 240) : "file";

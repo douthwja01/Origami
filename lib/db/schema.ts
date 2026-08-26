@@ -181,6 +181,7 @@ export const appSettings = pgTable("app_settings", {
   backupLastSummary: text("backup_last_summary"),
   theme: text("theme").notNull().default("workshop"),
   vaultName: text("vault_name").notNull().default("Workshop"),
+  maxUploadMb: integer("max_upload_mb"),
 });
 
 export const projectBackups = pgTable(

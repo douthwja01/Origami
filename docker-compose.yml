@@ -28,7 +28,7 @@ services:
       ORIGAMI_BACKUP_DIR: /data/backups
       ORIGAMI_LOG_DIR: /data/logs
       ORIGAMI_LOG_HOST: ${ORIGAMI_LOG_HOST:-./logs}
-      ORIGAMI_MAX_UPLOAD_MB: "512"
+      ORIGAMI_MAX_UPLOAD_MB: "10240"
       TZ: ${TZ:-Europe/London}
     volumes:
       # Host directory so uploads persist outside Docker. Override with ORIGAMI_VAULT_HOST.

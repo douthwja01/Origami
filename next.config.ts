@@ -1,4 +1,7 @@
 import type { NextConfig } from "next";
+import { maxUploadBodyLimitFromEnv } from "./lib/upload-limit-env";
+
+const uploadBodyLimit = maxUploadBodyLimitFromEnv();
 
 const nextConfig: NextConfig = {
   output: "standalone",
@@ -6,8 +9,9 @@ const nextConfig: NextConfig = {
   transpilePackages: ["three"],
   agentRules: false,
   experimental: {
+    proxyClientMaxBodySize: uploadBodyLimit,
     serverActions: {
-      bodySizeLimit: "512mb",
+      bodySizeLimit: uploadBodyLimit,
     },
   },
 };
