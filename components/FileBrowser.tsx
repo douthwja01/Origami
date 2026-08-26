@@ -483,24 +483,7 @@ export function FileBrowser({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-raised">
       <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line px-3 py-2">
-        <nav className="flex min-w-0 flex-1 flex-wrap items-center gap-1 text-[12px]">
-          {crumbs.map((crumb, index) => (
-            <span key={`${crumb.label}-${index}`} className="flex items-center gap-1">
-              {index > 0 ? <span className="text-muted">/</span> : null}
-              <button
-                type="button"
-                onClick={crumb.onClick}
-                className={
-                  index === crumbs.length - 1
-                    ? "text-ink"
-                    : "text-muted hover:text-ink"
-                }
-              >
-                {crumb.label}
-              </button>
-            </span>
-          ))}
-        </nav>
+        <div className="min-w-0 flex-1" aria-hidden="true" />
         <button
           type="button"
           onClick={goUp}
@@ -514,22 +497,22 @@ export function FileBrowser({
           onClick={() => {
             setError(null);
             setNewName("");
-            setCreatingFolder(true);
+            setCreatingFile(true);
           }}
           className="rounded-md border border-line px-2.5 py-1 text-[12px] hover:border-accent"
         >
-          New folder
+          New file
         </button>
         <button
           type="button"
           onClick={() => {
             setError(null);
             setNewName("");
-            setCreatingFile(true);
+            setCreatingFolder(true);
           }}
           className="rounded-md border border-line px-2.5 py-1 text-[12px] hover:border-accent"
         >
-          New file
+          New folder
         </button>
         <button
           type="button"
@@ -603,7 +586,7 @@ export function FileBrowser({
           <button
             type="button"
             onClick={() => setTagFilter(null)}
-            className="rounded-full border border-accent px-2 py-0.5 text-[11px] text-ink"
+            className="badge badge-active"
           >
             {activeTag.name} ×
           </button>
@@ -621,7 +604,7 @@ export function FileBrowser({
 
       <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <div
-          className={`min-h-0 overflow-auto border-b border-line lg:border-b-0 lg:border-r ${
+          className={`flex min-h-0 flex-col border-b border-line lg:border-b-0 lg:border-r ${
             dropTarget === path ? "bg-overlay/40" : ""
           }`}
           onDragOver={(event) => allowFolderDrop(path, event)}
@@ -632,6 +615,31 @@ export function FileBrowser({
           }}
           onDrop={(event) => handleFolderDrop(path, event)}
         >
+          <nav
+            aria-label="Folder path"
+            className="flex shrink-0 flex-wrap items-center gap-1 border-b border-line px-3 py-2 text-[12px]"
+          >
+            {crumbs.map((crumb, index) => (
+              <span
+                key={`${crumb.label}-${index}`}
+                className="flex items-center gap-1"
+              >
+                {index > 0 ? <span className="text-muted">/</span> : null}
+                <button
+                  type="button"
+                  onClick={crumb.onClick}
+                  className={
+                    index === crumbs.length - 1
+                      ? "font-mono text-ink"
+                      : "font-mono text-muted hover:text-ink"
+                  }
+                >
+                  {crumb.label}
+                </button>
+              </span>
+            ))}
+          </nav>
+          <div className="min-h-0 flex-1 overflow-auto">
           {emptyTree ? (
             <EmptyPane text="Empty folder. Use New folder / New file / Upload, or drop files here." />
           ) : emptySearch ? (
@@ -741,12 +749,6 @@ export function FileBrowser({
                         compact
                         onTagClick={applyTagFilter}
                       />
-                      <a
-                        href={`/api/assets/${asset.id}?download=1`}
-                        className="shrink-0 text-[11px] text-muted hover:text-ink"
-                      >
-                        Download
-                      </a>
                     </div>
                   </li>
                 );
@@ -775,6 +777,7 @@ export function FileBrowser({
               ) : null}
             </ul>
           )}
+          </div>
         </div>
 
         <div className="min-h-[280px] min-w-0 overflow-auto">
@@ -898,6 +901,16 @@ export function FileBrowser({
                 }
               : undefined
           }
+          onNewFolder={() => {
+            const target = menu.target;
+            if (target.type === "folder") {
+              setPath(target.path);
+              setSelection({ type: "folder", path: target.path });
+            }
+            setError(null);
+            setNewName("");
+            setCreatingFolder(true);
+          }}
           onDelete={() => {
             const target = menu.target;
             if (target.type === "file") {

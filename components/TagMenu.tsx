@@ -15,7 +15,7 @@ export function TagChips({
 }) {
   if (tags.length === 0) return null;
   return (
-    <div className="flex flex-wrap gap-1">
+    <div className="flex flex-wrap gap-0.5">
       {tags.map((tag) =>
         onTagClick ? (
           <button
@@ -26,22 +26,18 @@ export function TagChips({
               event.stopPropagation();
               onTagClick(tag);
             }}
-            className={`rounded-full border px-1.5 ${
-              tag.required
-                ? "border-accent/40 text-ink"
-                : "border-line text-muted hover:border-accent hover:text-ink"
-            } ${compact ? "py-0 text-[10px]" : "py-px text-[11px]"}`}
+            className={`badge ${tag.required ? "badge-required" : ""} ${
+              compact ? "" : "badge-lg"
+            }`}
           >
             {tag.name}
           </button>
         ) : (
           <span
             key={tag.id}
-            className={`rounded-full border px-1.5 ${
-              tag.required
-                ? "border-accent/40 text-ink"
-                : "border-line text-muted"
-            } ${compact ? "py-0 text-[10px]" : "py-px text-[11px]"}`}
+            className={`badge ${tag.required ? "badge-required" : ""} ${
+              compact ? "" : "badge-lg"
+            }`}
           >
             {tag.name}
           </span>
@@ -58,6 +54,7 @@ type Props = {
   catalog: TagDTO[];
   onSetNames: (names: string[]) => Promise<void>;
   onClose: () => void;
+  onNewFolder?: () => void;
   onDownload?: () => void;
   onDelete?: () => void;
 };
@@ -69,6 +66,7 @@ export function TagContextMenu({
   catalog,
   onSetNames,
   onClose,
+  onNewFolder,
   onDownload,
   onDelete,
 }: Props) {
@@ -227,8 +225,21 @@ export function TagContextMenu({
           </button>
         ) : null}
       </div>
-      {onDownload || onDelete ? (
+      {onNewFolder || onDownload || onDelete ? (
         <div className="border-t border-line py-1">
+          {onNewFolder ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                onNewFolder();
+                onClose();
+              }}
+              className="flex w-full px-3 py-1.5 text-left text-[13px] hover:bg-overlay"
+            >
+              New folder
+            </button>
+          ) : null}
           {onDownload ? (
             <button
               type="button"

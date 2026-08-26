@@ -311,7 +311,7 @@ export function BackupSettings({ initialSettings, backupDir, runs }: Props) {
             type="button"
             disabled={busy}
             onClick={() => void runNow()}
-            className="inline-flex items-center rounded-md bg-accent px-3 py-2 text-[13px] font-bold !text-white hover:bg-accent-dim disabled:opacity-50"
+            className="btn-accent"
           >
             Run now
           </button>

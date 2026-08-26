@@ -45,10 +45,7 @@ export default async function BackupsPage() {
           </div>
         </dl>
         <div className="mt-4 flex justify-end">
-          <a
-            href="/api/settings/backups/download"
-            className="inline-flex items-center rounded-md bg-accent px-3 py-2 text-[13px] font-bold !text-white hover:bg-accent-dim"
-          >
+          <a href="/api/settings/backups/download" className="btn-accent">
             Download backup
           </a>
         </div>

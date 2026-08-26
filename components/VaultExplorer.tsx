@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FileBrowser } from "@/components/FileBrowser";
+import { useProjects } from "@/components/ProjectsContext";
 import { formatBytes, formatDate, kindLabel, statusLabel } from "@/lib/format";
 import {
   parseProjectView,
@@ -42,7 +43,10 @@ export function VaultExplorer({
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { projects } = useProjects();
   const tab = parseProjectView(searchParams.get("view"));
+  const projectCode =
+    projects.find((project) => project.id === projectId)?.code ?? "Vault";
 
   const { counts, sizes, totalBytes } = useMemo(() => {
     const counts: Record<AssetKind, number> = {
@@ -118,16 +122,18 @@ export function VaultExplorer({
 
       {tab === "stats" ? (
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto">
-          <StatisticsCard
-            counts={counts}
-            sizes={sizes}
-            totalBytes={totalBytes}
-            onOpenTab={openTab}
-          />
-          <RecentFilesCard
-            recent={recent}
-            onOpenFile={() => openTab("overview")}
-          />
+          <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
+            <RecentFilesCard
+              recent={recent}
+              onOpenFile={() => openTab("overview")}
+            />
+            <StatisticsCard
+              counts={counts}
+              sizes={sizes}
+              totalBytes={totalBytes}
+              onOpenTab={openTab}
+            />
+          </div>
           <ChildProjectsCard nested={nested} onNewChild={onNewChild} />
         </div>
       ) : tab === "nested" ? (
@@ -153,6 +159,7 @@ export function VaultExplorer({
           folders={folders}
           nested={nested}
           tags={tags}
+          rootLabel={projectCode}
           filterKind={kindFolder ?? undefined}
           onChanged={onChanged}
           onNewChild={onNewChild}
@@ -206,7 +213,7 @@ function StatisticsCard({
   const totalFiles = ASSET_KINDS.reduce((sum, kind) => sum + counts[kind], 0);
 
   return (
-    <section className="shrink-0 rounded-xl border border-line bg-raised">
+    <section className="rounded-xl border border-line bg-raised">
       <div className="flex items-baseline justify-between gap-2 px-4 py-3">
         <h2 className="text-[13px] font-medium">Statistics</h2>
         <span className="font-mono text-[11px] text-muted">
@@ -214,25 +221,24 @@ function StatisticsCard({
           {formatBytes(totalBytes)}
         </span>
       </div>
-      <ul className="divide-y divide-line border-t border-line">
+      <div className="grid grid-cols-2 gap-2 border-t border-line p-3">
         {ASSET_KINDS.map((kind) => (
-          <li key={kind}>
-            <button
-              type="button"
-              onClick={() => onOpenTab(kind)}
-              className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-overlay/60"
-            >
-              <span className="text-[13px] text-ink">{kindLabel(kind)}</span>
-              <span className="flex shrink-0 items-baseline gap-3 font-mono text-[12px] text-muted">
-                <span>{counts[kind]}</span>
-                <span className="min-w-[4.5rem] text-right">
-                  {formatBytes(sizes[kind])}
-                </span>
-              </span>
-            </button>
-          </li>
+          <button
+            key={kind}
+            type="button"
+            onClick={() => onOpenTab(kind)}
+            className="rounded-lg border border-line bg-canvas px-3 py-2.5 text-left hover:border-accent/50"
+          >
+            <div className="text-[12px] text-muted">{kindLabel(kind)}</div>
+            <div className="mt-1 font-mono text-[16px] tracking-tight text-ink">
+              {counts[kind]}
+            </div>
+            <div className="mt-0.5 font-mono text-[11px] text-muted">
+              {formatBytes(sizes[kind])}
+            </div>
+          </button>
         ))}
-      </ul>
+      </div>
     </section>
   );
 }
@@ -245,7 +251,7 @@ function RecentFilesCard({
   onOpenFile: (asset: AssetDTO) => void;
 }) {
   return (
-    <section className="shrink-0 rounded-xl border border-line bg-raised">
+    <section className="rounded-xl border border-line bg-raised">
       <div className="px-4 py-3">
         <h2 className="text-[13px] font-medium">Recent files</h2>
       </div>
