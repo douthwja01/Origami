@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { assets, projects } from "@/lib/db/schema";
+import { assetTags, assets, projects, tags } from "@/lib/db/schema";
 import { absoluteFromStorage, hashFileSha256 } from "@/lib/vault";
 
 const PAYLOAD_VERSION = "origami-project-v1";
@@ -23,6 +23,7 @@ type AssetFingerprint = {
   filename: string;
   sizeBytes: number;
   contentHash: string;
+  tagKeys: string[];
 };
 
 async function mapPool<T, R>(
@@ -101,7 +102,7 @@ export class ProjectChecksum {
     const sorted = [...fingerprints].sort((a, b) => a.id.localeCompare(b.id));
     for (const file of sorted) {
       lines.push(
-        `${file.id}\t${file.kind}\t${file.filename}\t${file.sizeBytes}\t${file.contentHash}`,
+        `${file.id}\t${file.kind}\t${file.filename}\t${file.sizeBytes}\t${file.contentHash}\t${file.tagKeys.join(",")}`,
       );
     }
     return sha256Text(`${lines.join("\n")}\n`);
@@ -123,6 +124,28 @@ export class ProjectChecksum {
         row.contentHash = "";
       }
     });
+    const tagMap = new Map<string, string[]>();
+    if (this.files.length > 0) {
+      const tagRows = await db
+        .select({
+          assetId: assetTags.assetId,
+          key: tags.key,
+        })
+        .from(assetTags)
+        .innerJoin(tags, eq(assetTags.tagId, tags.id))
+        .where(
+          inArray(
+            assetTags.assetId,
+            this.files.map((row) => row.id),
+          ),
+        );
+      for (const row of tagRows) {
+        const list = tagMap.get(row.assetId) ?? [];
+        list.push(row.key);
+        tagMap.set(row.assetId, list);
+      }
+      for (const list of tagMap.values()) list.sort();
+    }
     this.value = ProjectChecksum.digest(
       this.meta,
       this.files.map((row) => ({
@@ -131,6 +154,7 @@ export class ProjectChecksum {
         filename: row.filename,
         sizeBytes: Number(row.sizeBytes),
         contentHash: row.contentHash || "",
+        tagKeys: tagMap.get(row.id) ?? [],
       })),
     );
     return this.value;

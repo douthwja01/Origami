@@ -9,10 +9,12 @@ import {
   deleteProject,
   getProjectRow,
   listAssets,
+  listFolders,
   listProjects,
   parseOptionalHttpUrl,
   updateProject,
 } from "@/lib/projects";
+import { listProjectTags } from "@/lib/tags";
 import { isStatus } from "@/lib/types";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -28,13 +30,22 @@ export async function GET(_request: Request, ctx: Ctx) {
   const project = all.find((p) => p.id === id);
   if (!project) return json({ error: "Project not found" }, 404);
 
-  const [ancestors, children, assetList] = await Promise.all([
+  const [ancestors, children, assetList, folderList, tagList] = await Promise.all([
     ancestorsOf(id),
     childrenOf(id),
     listAssets(id),
+    listFolders(id),
+    listProjectTags(id),
   ]);
 
-  return json({ project, ancestors, children, assets: assetList });
+  return json({
+    project,
+    ancestors,
+    children,
+    assets: assetList,
+    folders: folderList,
+    tags: tagList,
+  });
 }
 
 export async function PATCH(request: Request, ctx: Ctx) {

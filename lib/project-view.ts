@@ -1,9 +1,10 @@
 import { ASSET_KINDS, type AssetKind } from "@/lib/types";
 
-export type ProjectView = "overview" | AssetKind | "nested";
+export type ProjectView = "overview" | AssetKind | "nested" | "stats";
 
 export function parseProjectView(value: string | null): ProjectView {
   if (value === "nested") return "nested";
+  if (value === "stats") return "stats";
   if (value && ASSET_KINDS.includes(value as AssetKind)) {
     return value as AssetKind;
   }

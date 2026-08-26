@@ -1,13 +1,28 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { backupArchivedProject } from "@/lib/backup";
 import { getDb } from "@/lib/db";
-import { assets, projects } from "@/lib/db/schema";
+import { assets, projectFolders, projects } from "@/lib/db/schema";
+import {
+  isUnderFolderPath,
+  joinFolderPath,
+  normalizeFolderPath,
+  parseFolderName,
+} from "@/lib/folder-path";
 import {
   formatRootProjectCode,
   nextChildCode,
 } from "@/lib/project-code";
-import type { AssetDTO, AssetKind, ProjectDTO, ProjectStatus } from "@/lib/types";
-import { removeProjectVault } from "@/lib/vault";
+import { tagsForAssets, tagsForFolders, assignRequiredKindTag, setAssetTags } from "@/lib/tags";
+import { isKindTagKey } from "@/lib/tag-utils";
+import type {
+  AssetDTO,
+  AssetKind,
+  FolderDTO,
+  ProjectDTO,
+  ProjectStatus,
+  TagDTO,
+} from "@/lib/types";
+import { removeProjectVault, removeVaultFile } from "@/lib/vault";
 
 function emptyKinds(): Record<AssetKind, number> {
   return { media: 0, code: 0, document: 0, cad: 0 };
@@ -39,16 +54,34 @@ export function toProjectDTO(
   };
 }
 
-export function toAssetDTO(row: typeof assets.$inferSelect): AssetDTO {
+export function toAssetDTO(
+  row: typeof assets.$inferSelect,
+  itemTags: TagDTO[] = [],
+): AssetDTO {
   return {
     id: row.id,
     projectId: row.projectId,
     kind: row.kind,
+    folderPath: row.folderPath ?? "",
     filename: row.filename,
     mimeType: row.mimeType,
     sizeBytes: Number(row.sizeBytes),
     contentHash: row.contentHash,
     createdAt: row.createdAt.toISOString(),
+    tags: itemTags,
+  };
+}
+
+export function toFolderDTO(
+  row: typeof projectFolders.$inferSelect,
+  itemTags: TagDTO[] = [],
+): FolderDTO {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    path: row.path,
+    createdAt: row.createdAt.toISOString(),
+    tags: itemTags,
   };
 }
 
@@ -95,6 +128,23 @@ export async function getProjectByCode(code: string) {
     .select()
     .from(projects)
     .where(eq(projects.code, code))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function getProjectByTitle(
+  title: string,
+  excludeId?: string | null,
+) {
+  const db = getDb();
+  const normalized = title.trim().toLowerCase();
+  if (!normalized) return null;
+  const conditions = [sql`lower(${projects.title}) = ${normalized}`];
+  if (excludeId) conditions.push(ne(projects.id, excludeId));
+  const [row] = await db
+    .select()
+    .from(projects)
+    .where(and(...conditions))
     .limit(1);
   return row ?? null;
 }
@@ -174,6 +224,10 @@ export async function createProject(input: {
   if (existing) {
     throw Object.assign(new Error("Project ID already exists"), { status: 409 });
   }
+  const titleClash = await getProjectByTitle(input.title);
+  if (titleClash) {
+    throw Object.assign(new Error("Project name already exists"), { status: 409 });
+  }
   const [row] = await db
     .insert(projects)
     .values({
@@ -239,6 +293,14 @@ export async function updateProject(
     const clash = await getProjectByCode(patch.code);
     if (clash) {
       throw Object.assign(new Error("Project ID already exists"), { status: 409 });
+    }
+  }
+  if (patch.title !== undefined) {
+    const titleClash = await getProjectByTitle(patch.title, id);
+    if (titleClash) {
+      throw Object.assign(new Error("Project name already exists"), {
+        status: 409,
+      });
     }
   }
   if (patch.parentId !== undefined) {
@@ -368,7 +430,19 @@ export async function listAssets(projectId: string, kind?: AssetKind) {
         .from(assets)
         .where(eq(assets.projectId, projectId))
         .orderBy(asc(assets.filename));
-  return rows.map(toAssetDTO);
+  const tagMap = await tagsForAssets(rows.map((row) => row.id));
+  return rows.map((row) => toAssetDTO(row, tagMap.get(row.id) ?? []));
+}
+
+export async function listFolders(projectId: string): Promise<FolderDTO[]> {
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(projectFolders)
+    .where(eq(projectFolders.projectId, projectId))
+    .orderBy(asc(projectFolders.path));
+  const tagMap = await tagsForFolders(rows.map((row) => row.id));
+  return rows.map((row) => toFolderDTO(row, tagMap.get(row.id) ?? []));
 }
 
 export async function getAsset(id: string) {
@@ -380,6 +454,7 @@ export async function getAsset(id: string) {
 export async function insertAsset(input: {
   projectId: string;
   kind: AssetKind;
+  folderPath?: string;
   filename: string;
   mimeType: string;
   sizeBytes: number;
@@ -387,26 +462,166 @@ export async function insertAsset(input: {
   contentHash: string;
 }) {
   const db = getDb();
-  const [row] = await db.insert(assets).values(input).returning();
-  return toAssetDTO(row);
+  const folderPath = normalizeFolderPath(input.folderPath ?? "");
+  if (folderPath === null) {
+    throw Object.assign(new Error("Invalid folder path"), { status: 400 });
+  }
+  const [row] = await db
+    .insert(assets)
+    .values({ ...input, folderPath })
+    .returning();
+  const itemTags = await assignRequiredKindTag(row.id, row.projectId, row.kind);
+  return toAssetDTO(row, itemTags);
 }
 
 export async function updateAsset(
   id: string,
-  patch: { kind?: AssetKind },
+  patch: { kind?: AssetKind; folderPath?: string },
 ): Promise<AssetDTO> {
   const existing = await getAsset(id);
   if (!existing) {
     throw Object.assign(new Error("Asset not found"), { status: 404 });
   }
+  let folderPath: string | undefined;
+  if (patch.folderPath !== undefined) {
+    const parsed = normalizeFolderPath(patch.folderPath);
+    if (parsed === null) {
+      throw Object.assign(new Error("Invalid folder path"), { status: 400 });
+    }
+    folderPath = parsed;
+  }
   const [row] = await getDb()
     .update(assets)
     .set({
       ...(patch.kind !== undefined ? { kind: patch.kind } : {}),
+      ...(folderPath !== undefined ? { folderPath } : {}),
     })
     .where(eq(assets.id, id))
     .returning();
-  return toAssetDTO(row);
+  const tagMap = await tagsForAssets([row.id]);
+  let itemTags = tagMap.get(row.id) ?? [];
+  if (patch.kind !== undefined && patch.kind !== existing.kind) {
+    const extra = itemTags
+      .filter((tag) => !tag.required && !isKindTagKey(tag.key))
+      .map((tag) => tag.name);
+    itemTags = await setAssetTags(id, existing.projectId, extra);
+  }
+  return toAssetDTO(row, itemTags);
+}
+
+export async function createFolder(input: {
+  projectId: string;
+  parentPath: string;
+  name: string;
+}): Promise<FolderDTO> {
+  const parent = normalizeFolderPath(input.parentPath);
+  const name = parseFolderName(input.name);
+  if (parent === null) {
+    throw Object.assign(new Error("Invalid parent folder"), { status: 400 });
+  }
+  if (!name) {
+    throw Object.assign(new Error("Enter a valid folder name"), { status: 400 });
+  }
+  const path = joinFolderPath(parent, name);
+  const db = getDb();
+
+  const [existingFolder] = await db
+    .select({ id: projectFolders.id })
+    .from(projectFolders)
+    .where(
+      and(
+        eq(projectFolders.projectId, input.projectId),
+        eq(projectFolders.path, path),
+      ),
+    )
+    .limit(1);
+  if (existingFolder) {
+    throw Object.assign(new Error("Folder already exists"), { status: 409 });
+  }
+
+  const [clash] = await db
+    .select({ id: assets.id })
+    .from(assets)
+    .where(
+      and(
+        eq(assets.projectId, input.projectId),
+        eq(assets.folderPath, parent),
+        eq(assets.filename, name),
+      ),
+    )
+    .limit(1);
+  if (clash) {
+    throw Object.assign(
+      new Error("A file with that name already exists here"),
+      { status: 409 },
+    );
+  }
+
+  const [row] = await db
+    .insert(projectFolders)
+    .values({
+      projectId: input.projectId,
+      path,
+    })
+    .returning();
+  return toFolderDTO(row, []);
+}
+
+export async function deleteFolder(
+  projectId: string,
+  path: string,
+): Promise<{ deletedAssets: number; deletedFolders: number }> {
+  const normalized = normalizeFolderPath(path);
+  if (!normalized) {
+    throw Object.assign(new Error("Cannot delete the root folder"), {
+      status: 400,
+    });
+  }
+
+  const db = getDb();
+  const assetRows = await db
+    .select()
+    .from(assets)
+    .where(eq(assets.projectId, projectId));
+  const assetsInFolder = assetRows.filter(
+    (row) =>
+      row.folderPath === normalized ||
+      isUnderFolderPath(row.folderPath, normalized),
+  );
+
+  for (const row of assetsInFolder) {
+    await removeVaultFile(row.storagePath).catch(() => undefined);
+  }
+  if (assetsInFolder.length > 0) {
+    await db.delete(assets).where(
+      inArray(
+        assets.id,
+        assetsInFolder.map((row) => row.id),
+      ),
+    );
+  }
+
+  const folderRows = await db
+    .select()
+    .from(projectFolders)
+    .where(eq(projectFolders.projectId, projectId));
+  const foldersInPath = folderRows.filter(
+    (row) =>
+      row.path === normalized || isUnderFolderPath(row.path, normalized),
+  );
+  if (foldersInPath.length > 0) {
+    await db.delete(projectFolders).where(
+      inArray(
+        projectFolders.id,
+        foldersInPath.map((row) => row.id),
+      ),
+    );
+  }
+
+  return {
+    deletedAssets: assetsInFolder.length,
+    deletedFolders: foldersInPath.length,
+  };
 }
 
 export async function deleteAssetRow(id: string) {

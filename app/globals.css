@@ -70,6 +70,23 @@
   --color-archived: #6a5d78;
 }
 
+[data-theme="opal"] {
+  --theme-wallpaper: url("/themes/opal.avif");
+  --color-canvas: #f3f5f7;
+  --color-raised: #ffffff;
+  --color-overlay: #e8ecf0;
+  --color-line: #d0d6dd;
+  --color-ink: #1a2028;
+  --color-muted: #6b7380;
+  --color-accent: #e07a3a;
+  --color-accent-dim: #c4632e;
+  --color-planned: #6ba3c7;
+  --color-active: #e07a3a;
+  --color-hold: #d4a24a;
+  --color-done: #5f9a6e;
+  --color-archived: #8a9199;
+}
+
 html,
 body {
   background-color: var(--color-canvas);
@@ -79,6 +96,10 @@ body {
 
 html {
   color-scheme: dark;
+}
+
+html[data-theme="opal"] {
+  color-scheme: light;
 }
 
 body,
@@ -157,9 +178,20 @@ a {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 28%, transparent);
 }
 
+[data-theme="opal"] .fold {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 22%, transparent) 0 42%, transparent 42%),
+    var(--color-raised);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-line) 80%, transparent);
+}
+
 [data-theme="helix"] .bg-accent,
 [data-theme="ion"] .bg-accent {
   box-shadow: 0 0 18px color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+
+[data-theme="opal"] .bg-accent {
+  box-shadow: 0 0 14px color-mix(in srgb, var(--color-accent) 22%, transparent);
 }
 
 .status-dot {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { descendantIdSet, useProjects } from "@/components/ProjectsContext";
 import { todayIso, statusLabel } from "@/lib/format";
@@ -14,6 +14,14 @@ type Props = {
   onClose: () => void;
   onSaved?: (project: ProjectDTO) => void;
 };
+
+function fieldClass(invalid: boolean) {
+  return `w-full rounded-md border bg-canvas px-3 py-2 outline-none ${
+    invalid
+      ? "border-accent focus:border-accent"
+      : "border-line focus:border-accent"
+  }`;
+}
 
 export function ProjectForm({
   title,
@@ -35,6 +43,7 @@ export function ProjectForm({
   const [websiteUrl, setWebsiteUrl] = useState(project?.websiteUrl ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [attempted, setAttempted] = useState(false);
 
   const blocked = project ? descendantIdSet(projects, project.id) : new Set<string>();
   const parentOptions = projects.filter((p) => !blocked.has(p.id));
@@ -50,6 +59,33 @@ export function ProjectForm({
       )
     : "PROJ-001";
 
+  const others = useMemo(
+    () => projects.filter((p) => p.id !== project?.id),
+    [projects, project?.id],
+  );
+
+  const nameClash = useMemo(() => {
+    const normalized = name.trim().toLowerCase();
+    if (!normalized) return null;
+    return (
+      others.find((p) => p.title.trim().toLowerCase() === normalized) ?? null
+    );
+  }, [name, others]);
+
+  const effectiveCode = code.trim() || (selectedParent ? autoCodeHint : "");
+  const codeClash = useMemo(() => {
+    if (!effectiveCode) return null;
+    return others.find((p) => p.code === effectiveCode) ?? null;
+  }, [effectiveCode, others]);
+
+  const nameError = nameClash
+    ? "A project with this name already exists — choose a different title."
+    : null;
+  const codeError = codeClash
+    ? "A project with this ID already exists — choose a different project ID."
+    : null;
+  const hasClash = Boolean(nameError || codeError);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -60,8 +96,13 @@ export function ProjectForm({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true);
+    setAttempted(true);
     setError(null);
+    if (hasClash) {
+      setError("Change the conflicting name or project ID before submitting.");
+      return;
+    }
+    setSaving(true);
     const payload = {
       title: name,
       startDate,
@@ -93,6 +134,9 @@ export function ProjectForm({
     }
   }
 
+  const showNameError = Boolean(nameError && (attempted || name.trim()));
+  const showCodeError = Boolean(codeError && (attempted || code.trim()));
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/55 p-4 pt-[12vh]">
       <form
@@ -112,10 +156,17 @@ export function ProjectForm({
           <input
             required
             value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-md border border-line bg-canvas px-3 py-2 text-[14px] outline-none focus:border-accent"
+            onChange={(e) => {
+              setName(e.target.value);
+              setError(null);
+            }}
+            aria-invalid={showNameError}
+            className={`${fieldClass(showNameError)} text-[14px]`}
             autoFocus
           />
+          {showNameError ? (
+            <p className="mt-1 text-[12px] text-accent">{nameError}</p>
+          ) : null}
         </label>
         <div className="mb-3 grid grid-cols-2 gap-3">
           <label className="block">
@@ -124,10 +175,17 @@ export function ProjectForm({
             </span>
             <input
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={(e) => {
+                setCode(e.target.value);
+                setError(null);
+              }}
               placeholder={`Auto ${autoCodeHint}`}
-              className="w-full rounded-md border border-line bg-canvas px-3 py-2 font-mono text-[13px] outline-none focus:border-accent"
+              aria-invalid={showCodeError}
+              className={`${fieldClass(showCodeError)} font-mono text-[13px]`}
             />
+            {showCodeError ? (
+              <p className="mt-1 text-[12px] text-accent">{codeError}</p>
+            ) : null}
           </label>
           <label className="block">
             <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted">
@@ -138,7 +196,7 @@ export function ProjectForm({
               required
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="w-full rounded-md border border-line bg-canvas px-3 py-2 text-[13px] outline-none focus:border-accent"
+              className={`${fieldClass(false)} text-[13px]`}
             />
           </label>
         </div>
@@ -150,7 +208,7 @@ export function ProjectForm({
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as ProjectStatus)}
-              className="w-full rounded-md border border-line bg-canvas px-3 py-2 text-[13px] outline-none focus:border-accent"
+              className={`${fieldClass(false)} text-[13px]`}
             >
               {STATUSES.map((s) => (
                 <option key={s} value={s}>
@@ -166,7 +224,7 @@ export function ProjectForm({
             <select
               value={parentId}
               onChange={(e) => setParentId(e.target.value)}
-              className="w-full rounded-md border border-line bg-canvas px-3 py-2 text-[13px] outline-none focus:border-accent"
+              className={`${fieldClass(false)} text-[13px]`}
             >
               <option value="">Top level</option>
               {parentOptions.map((p) => (
@@ -188,7 +246,7 @@ export function ProjectForm({
             value={githubUrl}
             onChange={(e) => setGithubUrl(e.target.value)}
             placeholder="https://github.com/org/repo"
-            className="w-full rounded-md border border-line bg-canvas px-3 py-2 text-[13px] outline-none focus:border-accent"
+            className={`${fieldClass(false)} text-[13px]`}
           />
         </label>
         <label className="mb-4 block">
@@ -202,7 +260,7 @@ export function ProjectForm({
             value={websiteUrl}
             onChange={(e) => setWebsiteUrl(e.target.value)}
             placeholder="https://"
-            className="w-full rounded-md border border-line bg-canvas px-3 py-2 text-[13px] outline-none focus:border-accent"
+            className={`${fieldClass(false)} text-[13px]`}
           />
         </label>
         {error ? <p className="mb-3 text-[13px] text-accent">{error}</p> : null}
@@ -216,7 +274,7 @@ export function ProjectForm({
           </button>
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || hasClash}
             className="rounded-md bg-accent px-3 py-2 text-[13px] font-medium text-canvas disabled:opacity-60"
           >
             {saving ? "Saving…" : project ? "Save" : "Create"}

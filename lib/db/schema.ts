@@ -5,11 +5,13 @@ import {
   index,
   integer,
   pgEnum,
+  primaryKey,
   type AnyPgColumn,
   pgSequence,
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -80,6 +82,7 @@ export const assets = pgTable(
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
     kind: assetKind("kind").notNull(),
+    folderPath: text("folder_path").notNull().default(""),
     filename: text("filename").notNull(),
     mimeType: text("mime_type").notNull(),
     sizeBytes: bigint("size_bytes", { mode: "number" }).notNull(),
@@ -89,7 +92,80 @@ export const assets = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => [index("assets_project_id_idx").on(table.projectId)],
+  (table) => [
+    index("assets_project_id_idx").on(table.projectId),
+    index("assets_project_folder_idx").on(table.projectId, table.folderPath),
+  ],
+);
+
+export const projectFolders = pgTable(
+  "project_folders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    path: text("path").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("project_folders_project_id_idx").on(table.projectId),
+    unique("project_folders_unique_path").on(table.projectId, table.path),
+  ],
+);
+
+export const tags = pgTable(
+  "tags",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    key: text("key").notNull(),
+    required: boolean("required").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("tags_project_id_idx").on(table.projectId),
+    unique("tags_project_key_unique").on(table.projectId, table.key),
+  ],
+);
+
+export const assetTags = pgTable(
+  "asset_tags",
+  {
+    assetId: uuid("asset_id")
+      .notNull()
+      .references(() => assets.id, { onDelete: "cascade" }),
+    tagId: uuid("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.assetId, table.tagId] }),
+    index("asset_tags_tag_id_idx").on(table.tagId),
+  ],
+);
+
+export const folderTags = pgTable(
+  "folder_tags",
+  {
+    folderId: uuid("folder_id")
+      .notNull()
+      .references(() => projectFolders.id, { onDelete: "cascade" }),
+    tagId: uuid("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.folderId, table.tagId] }),
+    index("folder_tags_tag_id_idx").on(table.tagId),
+  ],
 );
 
 export const appSettings = pgTable("app_settings", {

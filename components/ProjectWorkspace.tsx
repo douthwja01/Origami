@@ -150,13 +150,6 @@ export function ProjectWorkspace({ id }: { id: string }) {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <IconButton
-                  label="Settings"
-                  active={settingsOpen}
-                  onClick={() => setSettingsOpen((open) => !open)}
-                >
-                  <IconSettings />
-                </IconButton>
                 <IconButton label="Edit" onClick={() => setEditing(true)}>
                   <IconPencil />
                 </IconButton>
@@ -176,6 +169,13 @@ export function ProjectWorkspace({ id }: { id: string }) {
                   ) : (
                     <IconArchive />
                   )}
+                </IconButton>
+                <IconButton
+                  label="Settings"
+                  active={settingsOpen}
+                  onClick={() => setSettingsOpen((open) => !open)}
+                >
+                  <IconSettings />
                 </IconButton>
                 <IconButton
                   label="Delete"
@@ -204,7 +204,9 @@ export function ProjectWorkspace({ id }: { id: string }) {
                   <VaultExplorer
                     projectId={project.id}
                     assets={data?.assets ?? []}
+                    folders={data?.folders ?? []}
                     nested={data?.children ?? []}
+                    tags={data?.tags ?? []}
                     onChanged={async () => {
                       await Promise.all([load(), refresh()]);
                     }}

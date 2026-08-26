@@ -1,7 +1,7 @@
 export const THEME_COOKIE = "origami_theme";
 export const DEFAULT_THEME_ID = "workshop";
 
-export const THEME_IDS = ["workshop", "helix", "ion"] as const;
+export const THEME_IDS = ["workshop", "helix", "ion", "opal"] as const;
 export type ThemeId = (typeof THEME_IDS)[number];
 
 export type ThemeSwatches = {
@@ -90,6 +90,27 @@ export const THEMES: readonly ThemeDefinition[] = [
       hold: "#e0a84a",
       done: "#5dcc8a",
       archived: "#6a5d78",
+    },
+  },
+  {
+    id: "opal",
+    name: "Opal",
+    description: "Paper white with grey, copper, and sky-blue accents.",
+    wallpaper: "/themes/opal.avif",
+    swatches: {
+      canvas: "#f3f5f7",
+      raised: "#ffffff",
+      overlay: "#e8ecf0",
+      line: "#d0d6dd",
+      ink: "#1a2028",
+      muted: "#6b7380",
+      accent: "#e07a3a",
+      accentDim: "#c4632e",
+      planned: "#6ba3c7",
+      active: "#e07a3a",
+      hold: "#d4a24a",
+      done: "#5f9a6e",
+      archived: "#8a9199",
     },
   },
 ];

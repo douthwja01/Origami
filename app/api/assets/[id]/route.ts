@@ -46,22 +46,25 @@ export async function PATCH(request: Request, ctx: Ctx) {
   if (isResponse(user)) return user;
   const { id } = await ctx.params;
 
-  let body: { kind?: string };
+  let body: { kind?: string; folderPath?: string };
   try {
     body = await request.json();
   } catch {
     return json({ error: "Invalid JSON" }, 400);
   }
 
-  if (body.kind === undefined) {
-    return json({ error: "kind is required" }, 400);
+  if (body.kind === undefined && body.folderPath === undefined) {
+    return json({ error: "kind or folderPath is required" }, 400);
   }
-  if (!isKind(body.kind)) {
+  if (body.kind !== undefined && !isKind(body.kind)) {
     return json({ error: "Invalid kind" }, 400);
   }
 
   try {
-    const asset = await updateAsset(id, { kind: body.kind });
+    const asset = await updateAsset(id, {
+      kind: body.kind,
+      folderPath: body.folderPath,
+    });
     return json({ asset });
   } catch (error) {
     const statusCode = (error as { status?: number }).status ?? 500;

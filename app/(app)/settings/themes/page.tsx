@@ -16,7 +16,7 @@ export default async function ThemesPage() {
         spacing and structure stay put.
       </p>
 
-      <section className="mt-6 max-w-2xl">
+      <section className="mt-6 max-w-4xl">
         <ThemePicker initialTheme={theme} />
       </section>
     </main>

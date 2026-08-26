@@ -43,15 +43,34 @@ export type ProjectDTO = {
   assetsByKind: Record<AssetKind, number>;
 };
 
+export type TagDTO = {
+  id: string;
+  projectId: string;
+  name: string;
+  key: string;
+  required: boolean;
+  createdAt: string;
+};
+
 export type AssetDTO = {
   id: string;
   projectId: string;
   kind: AssetKind;
+  folderPath: string;
   filename: string;
   mimeType: string;
   sizeBytes: number;
   contentHash: string | null;
   createdAt: string;
+  tags: TagDTO[];
+};
+
+export type FolderDTO = {
+  id: string;
+  projectId: string;
+  path: string;
+  createdAt: string;
+  tags: TagDTO[];
 };
 
 export type ProjectTreeNode = ProjectDTO & { children: ProjectTreeNode[] };
@@ -61,6 +80,8 @@ export type ProjectDetail = {
   ancestors: ProjectDTO[];
   children: ProjectDTO[];
   assets: AssetDTO[];
+  folders: FolderDTO[];
+  tags: TagDTO[];
 };
 
 export function isStatus(value: unknown): value is ProjectStatus {

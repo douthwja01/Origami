@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { json, isResponse, requireUser } from "@/lib/api";
 import { inferKind } from "@/lib/kinds";
 import { getProjectRow, insertAsset } from "@/lib/projects";
-import { isKind } from "@/lib/types";
 import { maxUploadBytes, removeVaultFile, writeVaultFile } from "@/lib/vault";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -37,11 +36,11 @@ export async function POST(request: Request, ctx: Ctx) {
     );
   }
 
-  const kindField = form.get("kind");
-  const kind =
-    typeof kindField === "string" && isKind(kindField)
-      ? kindField
-      : inferKind(file.name);
+  const kind = inferKind(file.name);
+
+  const folderField = form.get("folderPath");
+  const folderPath =
+    typeof folderField === "string" ? folderField : "";
 
   const assetId = randomUUID();
   const filename = file.name || "file";
@@ -54,10 +53,11 @@ export async function POST(request: Request, ctx: Ctx) {
       filename,
       file.stream(),
     );
-    const sizeBytes = file.size || written.bytes;
+    const sizeBytes = written.bytes || file.size;
     const asset = await insertAsset({
       projectId,
       kind,
+      folderPath,
       filename,
       mimeType,
       sizeBytes,

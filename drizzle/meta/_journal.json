@@ -85,6 +85,27 @@
       "when": 1787738014855,
       "tag": "0011_project_level_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787748342691,
+      "tag": "0012_vault_folders",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787749231757,
+      "tag": "0013_asset_tags",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1787750899142,
+      "tag": "0014_kind_tags",
+      "breakpoints": true
     }
   ]
 }

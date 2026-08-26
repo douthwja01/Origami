@@ -35,7 +35,7 @@ export function ThemePicker({ initialTheme }: Props) {
 
   return (
     <div>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {THEMES.map((item) => (
           <ThemeCard
             key={item.id}

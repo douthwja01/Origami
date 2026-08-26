@@ -1,13 +1,17 @@
 export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let value = bytes / 1024;
-  let i = 0;
-  while (value >= 1024 && i < units.length - 1) {
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n <= 0) return "0 B";
+  if (n < 1024) return `${Math.round(n)} B`;
+  const units = ["KB", "MB", "GB", "TB"] as const;
+  let value = n;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
     value /= 1024;
-    i += 1;
+    unit += 1;
   }
-  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[i]}`;
+  const rounded =
+    value < 10 ? value.toFixed(1) : value < 100 ? value.toFixed(1) : String(Math.round(value));
+  return `${rounded} ${units[unit]}`;
 }
 
 export function formatDate(isoDate: string): string {
