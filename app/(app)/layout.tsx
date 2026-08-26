@@ -1,9 +1,20 @@
 import { AppShell } from "@/components/AppShell";
+import { getProjectDisplaySettings } from "@/lib/project-settings";
+import { DEFAULT_PROJECT_DISPLAY_SETTINGS } from "@/lib/project-settings-types";
 
-export default function SignedInLayout({
+export const dynamic = "force-dynamic";
+
+export default async function SignedInLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <AppShell>{children}</AppShell>;
+  let initialDisplay = DEFAULT_PROJECT_DISPLAY_SETTINGS;
+  try {
+    initialDisplay = await getProjectDisplaySettings();
+  } catch {
+    // Fall back to defaults when the database is unavailable at build time.
+  }
+
+  return <AppShell initialDisplay={initialDisplay}>{children}</AppShell>;
 }

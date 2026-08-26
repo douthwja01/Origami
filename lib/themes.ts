@@ -24,6 +24,7 @@ export type ThemeDefinition = {
   id: ThemeId;
   name: string;
   description: string;
+  wallpaper: string;
   swatches: ThemeSwatches;
 };
 
@@ -32,6 +33,7 @@ export const THEMES: readonly ThemeDefinition[] = [
     id: "workshop",
     name: "Workshop",
     description: "Warm charcoal and copper — the original Origami look.",
+    wallpaper: "/themes/workshop.jpg",
     swatches: {
       canvas: "#101214",
       raised: "#171a1d",
@@ -52,6 +54,7 @@ export const THEMES: readonly ThemeDefinition[] = [
     id: "helix",
     name: "Helix",
     description: "Void navy and electric cyan. Same structure, colder light.",
+    wallpaper: "/themes/helix.jpg",
     swatches: {
       canvas: "#07090f",
       raised: "#0c111a",
@@ -72,6 +75,7 @@ export const THEMES: readonly ThemeDefinition[] = [
     id: "ion",
     name: "Ion",
     description: "Deep violet with a magenta signal. Same panels, different glow.",
+    wallpaper: "/themes/ion.jpg",
     swatches: {
       canvas: "#0b0710",
       raised: "#140c1a",

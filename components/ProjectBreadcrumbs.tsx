@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useProjectDisplay } from "@/components/ProjectDisplayContext";
 import { useProjects } from "@/components/ProjectsContext";
 import { settingsItemForPath } from "@/lib/settings";
 import type { ProjectDTO } from "@/lib/types";
@@ -25,6 +26,7 @@ function ancestorsOf(projects: ProjectDTO[], id: string): ProjectDTO[] {
 export function ProjectBreadcrumbs() {
   const pathname = usePathname();
   const { projects } = useProjects();
+  const { settings } = useProjectDisplay();
   const match = pathname.match(/^\/projects\/([^/]+)$/);
   const projectId = match?.[1];
   const project = projectId
@@ -40,10 +42,10 @@ export function ProjectBreadcrumbs() {
       className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto text-[12px] text-muted"
     >
       {onHome ? (
-        <span className="shrink-0 text-ink">Workshop</span>
+        <span className="shrink-0 text-ink">{settings.vaultName}</span>
       ) : (
         <Link href="/" className="shrink-0 hover:text-ink">
-          Workshop
+          {settings.vaultName}
         </Link>
       )}
       {pathname.startsWith("/settings") ? (

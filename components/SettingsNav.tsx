@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SETTINGS_NAV } from "@/lib/settings";
+import { useProjectDisplay } from "@/components/ProjectDisplayContext";
 
 function itemIsActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -10,12 +11,13 @@ function itemIsActive(pathname: string, href: string) {
 
 export function SettingsSidebar() {
   const pathname = usePathname();
+  const { settings } = useProjectDisplay();
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="border-b border-line px-3 py-3">
         <Link href="/" className="text-[12px] text-muted hover:text-ink">
-          ← Workshop
+          ← {settings.vaultName}
         </Link>
         <div className="mt-2 text-[13px] text-ink">Settings</div>
       </div>

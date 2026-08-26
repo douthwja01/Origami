@@ -26,6 +26,11 @@ export function toProjectDTO(
     startDate: row.startDate,
     status: row.status,
     parentId: row.parentId,
+    githubUrl: row.githubUrl,
+    websiteUrl: row.websiteUrl,
+    mediaBackground: row.mediaBackground,
+    mediaBackgroundCycle: row.mediaBackgroundCycle,
+    mediaBackgroundOpacity: row.mediaBackgroundOpacity,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     childCount,
@@ -94,6 +99,33 @@ export async function getProjectByCode(code: string) {
   return row ?? null;
 }
 
+export function parseOptionalHttpUrl(
+  value: unknown,
+  label: string,
+): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") {
+    throw Object.assign(new Error(`${label} must be a string`), { status: 400 });
+  }
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const candidate = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
+  let parsed: URL;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    throw Object.assign(new Error(`${label} is not a valid URL`), { status: 400 });
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw Object.assign(new Error(`${label} must be an http(s) URL`), {
+      status: 400,
+    });
+  }
+  return parsed.href;
+}
+
 export async function nextProjectCode(parentId?: string | null): Promise<string> {
   if (parentId) {
     const parent = await getProjectRow(parentId);
@@ -127,6 +159,8 @@ export async function createProject(input: {
   status: ProjectStatus;
   parentId: string | null;
   code?: string;
+  githubUrl?: string | null;
+  websiteUrl?: string | null;
 }): Promise<ProjectDTO> {
   const db = getDb();
   if (input.parentId) {
@@ -148,6 +182,8 @@ export async function createProject(input: {
       startDate: input.startDate,
       status: input.status,
       parentId: input.parentId,
+      githubUrl: input.githubUrl ?? null,
+      websiteUrl: input.websiteUrl ?? null,
     })
     .returning();
   if (row.status === "archived") {
@@ -187,6 +223,11 @@ export async function updateProject(
     status?: ProjectStatus;
     parentId?: string | null;
     code?: string;
+    githubUrl?: string | null;
+    websiteUrl?: string | null;
+    mediaBackground?: boolean;
+    mediaBackgroundCycle?: boolean;
+    mediaBackgroundOpacity?: number;
   },
 ): Promise<ProjectDTO> {
   const db = getDb();
@@ -223,6 +264,17 @@ export async function updateProject(
       ...(patch.status !== undefined ? { status: patch.status } : {}),
       ...(patch.parentId !== undefined ? { parentId: patch.parentId } : {}),
       ...(patch.code !== undefined ? { code: patch.code.trim() } : {}),
+      ...(patch.githubUrl !== undefined ? { githubUrl: patch.githubUrl } : {}),
+      ...(patch.websiteUrl !== undefined ? { websiteUrl: patch.websiteUrl } : {}),
+      ...(patch.mediaBackground !== undefined
+        ? { mediaBackground: patch.mediaBackground }
+        : {}),
+      ...(patch.mediaBackgroundCycle !== undefined
+        ? { mediaBackgroundCycle: patch.mediaBackgroundCycle }
+        : {}),
+      ...(patch.mediaBackgroundOpacity !== undefined
+        ? { mediaBackgroundOpacity: patch.mediaBackgroundOpacity }
+        : {}),
       updatedAt: new Date(),
     })
     .where(eq(projects.id, id))

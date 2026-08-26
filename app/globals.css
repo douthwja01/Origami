@@ -20,6 +20,7 @@
 
 :root,
 [data-theme="workshop"] {
+  --theme-wallpaper: url("/themes/workshop.jpg");
   --color-canvas: #101214;
   --color-raised: #171a1d;
   --color-overlay: #1e2226;
@@ -36,6 +37,7 @@
 }
 
 [data-theme="helix"] {
+  --theme-wallpaper: url("/themes/helix.jpg");
   --color-canvas: #07090f;
   --color-raised: #0c111a;
   --color-overlay: #131a26;
@@ -52,6 +54,7 @@
 }
 
 [data-theme="ion"] {
+  --theme-wallpaper: url("/themes/ion.jpg");
   --color-canvas: #0b0710;
   --color-raised: #140c1a;
   --color-overlay: #1c1326;
@@ -69,7 +72,7 @@
 
 html,
 body {
-  background: var(--color-canvas);
+  background-color: var(--color-canvas);
   color: var(--color-ink);
   min-height: 100%;
 }
@@ -78,19 +81,24 @@ html {
   color-scheme: dark;
 }
 
+body,
+.theme-wallpaper {
+  background-color: var(--color-canvas);
+  background-image:
+    linear-gradient(
+      color-mix(in srgb, var(--color-canvas) 62%, transparent),
+      color-mix(in srgb, var(--color-canvas) 78%, transparent)
+    ),
+    var(--theme-wallpaper);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
 body {
   font-family: var(--font-sans);
   letter-spacing: -0.011em;
-}
-
-[data-theme="helix"] body,
-[data-theme="ion"] body {
-  background-image: radial-gradient(
-    900px 420px at 12% -8%,
-    color-mix(in srgb, var(--color-accent) 14%, transparent),
-    transparent 60%
-  );
-  background-attachment: fixed;
 }
 
 * {
@@ -106,6 +114,10 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+input[type="range"] {
+  accent-color: var(--color-accent);
 }
 
 a {

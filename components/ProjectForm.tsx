@@ -31,6 +31,8 @@ export function ProjectForm({
   const [parentId, setParentId] = useState(
     project?.parentId ?? defaultParentId ?? "",
   );
+  const [githubUrl, setGithubUrl] = useState(project?.githubUrl ?? "");
+  const [websiteUrl, setWebsiteUrl] = useState(project?.websiteUrl ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -65,6 +67,8 @@ export function ProjectForm({
       startDate,
       status,
       parentId: parentId || null,
+      githubUrl: githubUrl.trim(),
+      websiteUrl: websiteUrl.trim(),
       ...(code.trim() ? { code: code.trim() } : {}),
     };
     const res = await fetch(
@@ -173,6 +177,34 @@ export function ProjectForm({
             </select>
           </label>
         </div>
+        <label className="mb-3 block">
+          <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted">
+            GitHub URL
+          </span>
+          <input
+            type="text"
+            inputMode="url"
+            autoComplete="url"
+            value={githubUrl}
+            onChange={(e) => setGithubUrl(e.target.value)}
+            placeholder="https://github.com/org/repo"
+            className="w-full rounded-md border border-line bg-canvas px-3 py-2 text-[13px] outline-none focus:border-accent"
+          />
+        </label>
+        <label className="mb-4 block">
+          <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted">
+            Website URL
+          </span>
+          <input
+            type="text"
+            inputMode="url"
+            autoComplete="url"
+            value={websiteUrl}
+            onChange={(e) => setWebsiteUrl(e.target.value)}
+            placeholder="https://"
+            className="w-full rounded-md border border-line bg-canvas px-3 py-2 text-[13px] outline-none focus:border-accent"
+          />
+        </label>
         {error ? <p className="mb-3 text-[13px] text-accent">{error}</p> : null}
         <div className="flex justify-end gap-2">
           <button

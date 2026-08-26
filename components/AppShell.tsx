@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ProjectsProvider } from "@/components/ProjectsContext";
+import { ProjectDisplayProvider } from "@/components/ProjectDisplayContext";
 import { ProjectBreadcrumbs } from "@/components/ProjectBreadcrumbs";
 import { SettingsMenu } from "@/components/SettingsMenu";
 import { SettingsSidebar } from "@/components/SettingsNav";
@@ -11,8 +12,15 @@ import { ProjectTree } from "@/components/ProjectTree";
 import { ProjectSidebar } from "@/components/ProjectSidebar";
 import { ProjectForm } from "@/components/ProjectForm";
 import { projectIdFromPath } from "@/lib/project-view";
+import type { ProjectDisplaySettings } from "@/lib/project-settings-types";
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  initialDisplay,
+}: {
+  children: React.ReactNode;
+  initialDisplay: ProjectDisplaySettings;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const [creating, setCreating] = useState(false);
@@ -33,6 +41,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <ProjectsProvider>
+      <ProjectDisplayProvider initialSettings={initialDisplay}>
       <div className={`app-frame ${showSidebar ? "" : "wide"}`}>
         <aside
           className={`h-dvh min-h-0 flex-col overflow-hidden border-r border-line bg-raised ${
@@ -81,7 +90,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <ProjectTree />
           )}
         </aside>
-        <div className="flex h-dvh min-h-0 min-w-0 flex-col overflow-hidden bg-canvas">
+        <div className="theme-wallpaper flex h-dvh min-h-0 min-w-0 flex-col overflow-hidden">
           <div className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-2.5">
             <div
               className={`flex shrink-0 items-center gap-2 ${
@@ -140,6 +149,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {creating ? (
         <ProjectForm title="New project" onClose={() => setCreating(false)} />
       ) : null}
+      </ProjectDisplayProvider>
     </ProjectsProvider>
   );
 }

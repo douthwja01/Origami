@@ -46,6 +46,15 @@ export const projects = pgTable(
     parentId: uuid("parent_id").references((): AnyPgColumn => projects.id, {
       onDelete: "restrict",
     }),
+    githubUrl: text("github_url"),
+    websiteUrl: text("website_url"),
+    mediaBackground: boolean("media_background").notNull().default(false),
+    mediaBackgroundCycle: boolean("media_background_cycle")
+      .notNull()
+      .default(false),
+    mediaBackgroundOpacity: integer("media_background_opacity")
+      .notNull()
+      .default(25),
     checksum: text("checksum"),
     checksumAt: timestamp("checksum_at", { withTimezone: true }),
     lastBackupChecksum: text("last_backup_checksum"),
@@ -95,6 +104,7 @@ export const appSettings = pgTable("app_settings", {
   backupLastRunAt: timestamp("backup_last_run_at", { withTimezone: true }),
   backupLastSummary: text("backup_last_summary"),
   theme: text("theme").notNull().default("workshop"),
+  vaultName: text("vault_name").notNull().default("Workshop"),
 });
 
 export const projectBackups = pgTable(

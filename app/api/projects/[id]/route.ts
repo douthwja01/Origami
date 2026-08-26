@@ -1,11 +1,16 @@
 import { json, isResponse, requireUser } from "@/lib/api";
 import {
+  clampMediaBackgroundOpacity,
+  isMediaBackgroundOpacity,
+} from "@/lib/project-settings";
+import {
   ancestorsOf,
   childrenOf,
   deleteProject,
   getProjectRow,
   listAssets,
   listProjects,
+  parseOptionalHttpUrl,
   updateProject,
 } from "@/lib/projects";
 import { isStatus } from "@/lib/types";
@@ -43,6 +48,11 @@ export async function PATCH(request: Request, ctx: Ctx) {
     status?: string;
     parentId?: string | null;
     code?: string;
+    githubUrl?: string | null;
+    websiteUrl?: string | null;
+    mediaBackground?: unknown;
+    mediaBackgroundCycle?: unknown;
+    mediaBackgroundOpacity?: unknown;
   };
   try {
     body = await request.json();
@@ -57,6 +67,40 @@ export async function PATCH(request: Request, ctx: Ctx) {
     return json({ error: "Invalid start date" }, 400);
   }
 
+  let githubUrl: string | null | undefined;
+  let websiteUrl: string | null | undefined;
+  try {
+    githubUrl =
+      body.githubUrl === undefined
+        ? undefined
+        : parseOptionalHttpUrl(body.githubUrl, "GitHub URL");
+    websiteUrl =
+      body.websiteUrl === undefined
+        ? undefined
+        : parseOptionalHttpUrl(body.websiteUrl, "Website URL");
+  } catch (error) {
+    return json({ error: (error as Error).message }, 400);
+  }
+
+  if (
+    body.mediaBackground !== undefined &&
+    typeof body.mediaBackground !== "boolean"
+  ) {
+    return json({ error: "mediaBackground must be a boolean" }, 400);
+  }
+  if (
+    body.mediaBackgroundCycle !== undefined &&
+    typeof body.mediaBackgroundCycle !== "boolean"
+  ) {
+    return json({ error: "mediaBackgroundCycle must be a boolean" }, 400);
+  }
+  if (
+    body.mediaBackgroundOpacity !== undefined &&
+    !isMediaBackgroundOpacity(body.mediaBackgroundOpacity)
+  ) {
+    return json({ error: "Opacity must be a whole number from 0 to 100" }, 400);
+  }
+
   try {
     const project = await updateProject(id, {
       title: body.title,
@@ -64,6 +108,20 @@ export async function PATCH(request: Request, ctx: Ctx) {
       status: body.status,
       parentId: body.parentId,
       code: body.code,
+      githubUrl,
+      websiteUrl,
+      mediaBackground:
+        typeof body.mediaBackground === "boolean"
+          ? body.mediaBackground
+          : undefined,
+      mediaBackgroundCycle:
+        typeof body.mediaBackgroundCycle === "boolean"
+          ? body.mediaBackgroundCycle
+          : undefined,
+      mediaBackgroundOpacity:
+        body.mediaBackgroundOpacity === undefined
+          ? undefined
+          : clampMediaBackgroundOpacity(Number(body.mediaBackgroundOpacity)),
     });
     return json({ project });
   } catch (error) {

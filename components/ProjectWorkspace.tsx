@@ -4,19 +4,24 @@ import { useCallback, useEffect, useState, type ReactNode, Suspense } from "reac
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ProjectForm } from "@/components/ProjectForm";
+import { ProjectMediaBackground } from "@/components/ProjectMediaBackground";
+import { ProjectPageSettings } from "@/components/ProjectPageSettings";
 import { VaultExplorer } from "@/components/VaultExplorer";
 import { useProjects } from "@/components/ProjectsContext";
+import { useProjectDisplay } from "@/components/ProjectDisplayContext";
 import { formatDate, statusLabel } from "@/lib/format";
 import type { ProjectDetail } from "@/lib/types";
 
 export function ProjectWorkspace({ id }: { id: string }) {
   const router = useRouter();
   const { refresh } = useProjects();
+  const { settings } = useProjectDisplay();
   const [data, setData] = useState<ProjectDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [creatingChild, setCreatingChild] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -38,7 +43,7 @@ export function ProjectWorkspace({ id }: { id: string }) {
   const project = data?.project;
   const parent = data?.ancestors.at(-1);
   const backHref = parent ? `/projects/${parent.id}` : "/";
-  const backLabel = parent ? parent.code : "Workshop";
+  const backLabel = parent ? parent.code : settings.vaultName;
 
   async function archive() {
     if (!project) return;
@@ -74,11 +79,18 @@ export function ProjectWorkspace({ id }: { id: string }) {
 
   return (
     <>
-      <main className="flex h-full min-h-0 flex-col overflow-hidden px-5 py-4 lg:px-8">
-        {error && !data ? <p className="text-accent">{error}</p> : null}
+      <main className="relative flex h-full min-h-0 flex-col overflow-hidden px-5 py-4 lg:px-8">
         {project ? (
-          <>
-            <header className="mb-4 flex flex-wrap items-start justify-between gap-4">
+          <ProjectMediaBackground
+            project={project}
+            assets={data?.assets ?? []}
+          />
+        ) : null}
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden">
+          {error && !data ? <p className="text-accent">{error}</p> : null}
+          {project ? (
+            <>
+              <header className="mb-4 flex flex-wrap items-start justify-between gap-4">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex shrink-0 flex-col overflow-hidden rounded-md border border-line">
                   <Link
@@ -112,12 +124,39 @@ export function ProjectWorkspace({ id }: { id: string }) {
                   <h1 className="mt-1 text-[22px] font-medium tracking-tight">
                     {project.title}
                   </h1>
-                  <p className="text-[13px] text-muted">
-                    Started {formatDate(project.startDate)}
+                  <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted">
+                    <span>Started {formatDate(project.startDate)}</span>
+                    {project.githubUrl ? (
+                      <a
+                        href={project.githubUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:text-ink hover:underline"
+                      >
+                        GitHub
+                      </a>
+                    ) : null}
+                    {project.websiteUrl ? (
+                      <a
+                        href={project.websiteUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:text-ink hover:underline"
+                      >
+                        Website
+                      </a>
+                    ) : null}
                   </p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
+                <IconButton
+                  label="Settings"
+                  active={settingsOpen}
+                  onClick={() => setSettingsOpen((open) => !open)}
+                >
+                  <IconSettings />
+                </IconButton>
                 <IconButton label="Edit" onClick={() => setEditing(true)}>
                   <IconPencil />
                 </IconButton>
@@ -149,26 +188,36 @@ export function ProjectWorkspace({ id }: { id: string }) {
             </header>
 
             <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-              <Suspense
-                fallback={
-                  <p className="px-3 py-6 text-[13px] text-muted">Loading vault…</p>
-                }
-              >
-                <VaultExplorer
-                  projectId={project.id}
-                  assets={data?.assets ?? []}
-                  nested={data?.children ?? []}
-                  onChanged={async () => {
+              {settingsOpen ? (
+                <ProjectPageSettings
+                  project={project}
+                  onSaved={async () => {
                     await Promise.all([load(), refresh()]);
                   }}
-                  onNewChild={() => setCreatingChild(true)}
                 />
-              </Suspense>
+              ) : (
+                <Suspense
+                  fallback={
+                    <p className="px-3 py-6 text-[13px] text-muted">Loading vault…</p>
+                  }
+                >
+                  <VaultExplorer
+                    projectId={project.id}
+                    assets={data?.assets ?? []}
+                    nested={data?.children ?? []}
+                    onChanged={async () => {
+                      await Promise.all([load(), refresh()]);
+                    }}
+                    onNewChild={() => setCreatingChild(true)}
+                  />
+                </Suspense>
+              )}
             </div>
           </>
         ) : !error ? (
           <p className="text-muted">Loading…</p>
         ) : null}
+        </div>
       </main>
 
       {editing && project ? (
@@ -237,12 +286,14 @@ function IconButton({
   onClick,
   disabled,
   danger,
+  active,
   children,
 }: {
   label: string;
   onClick: () => void;
   disabled?: boolean;
   danger?: boolean;
+  active?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -250,13 +301,32 @@ function IconButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex h-8 items-center gap-1.5 rounded-md border border-line px-2.5 text-[12px] hover:border-accent disabled:opacity-50 ${
-        danger ? "text-accent" : "text-muted hover:text-ink"
+      aria-pressed={active}
+      className={`inline-flex h-7 items-center gap-1 rounded-md border px-2 text-[11px] hover:border-accent disabled:opacity-50 ${
+        active
+          ? "border-accent bg-overlay text-ink"
+          : danger
+            ? "border-line text-accent"
+            : "border-line text-muted hover:text-ink"
       }`}
     >
       {children}
       {label}
     </button>
+  );
+}
+
+function IconSettings() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M6.4 2.4h3.2l.4 1.5a4.8 4.8 0 0 1 1.3.7l1.5-.5 1.6 2.8-1.2 1.1c.1.4.1.8 0 1.2l1.2 1.1-1.6 2.8-1.5-.5a4.8 4.8 0 0 1-1.3.7l-.4 1.5H6.4l-.4-1.5a4.8 4.8 0 0 1-1.3-.7l-1.5.5-1.6-2.8 1.2-1.1a4.8 4.8 0 0 1 0-1.2L1.6 6.9l1.6-2.8 1.5.5a4.8 4.8 0 0 1 1.3-.7l.4-1.5Z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <circle cx="8" cy="8" r="1.8" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
   );
 }
 
@@ -287,7 +357,7 @@ function IconBack() {
 
 function IconPencil() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path
         d="M11.2 2.8 13.2 4.8 5.6 12.4 3 13l.6-2.6 7.6-7.6Z"
         stroke="currentColor"
@@ -301,7 +371,7 @@ function IconPencil() {
 
 function IconNewChild() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <rect
         x="2.5"
         y="2.5"
@@ -329,7 +399,7 @@ function IconNewChild() {
 
 function IconArchive() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path
         d="M2.5 3.8h11v2.4h-11V3.8Z"
         stroke="currentColor"
@@ -349,7 +419,7 @@ function IconArchive() {
 
 function IconUnarchive() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path
         d="M2.5 3.8h11v2.4h-11V3.8Z"
         stroke="currentColor"
@@ -375,7 +445,7 @@ function IconUnarchive() {
 
 function IconTrash() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d="M3.2 4.4h9.6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
       <path
         d="M6.2 4.4V3.2h3.6v1.2"

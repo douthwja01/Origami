@@ -1,0 +1,1 @@
+ALTER TABLE "app_settings" ADD COLUMN "vault_name" text DEFAULT 'Workshop' NOT NULL;

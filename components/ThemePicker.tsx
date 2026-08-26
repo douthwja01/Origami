@@ -78,7 +78,10 @@ function ThemeCard({
       <div
         className="overflow-hidden rounded-md border"
         style={{
-          background: swatches.canvas,
+          backgroundColor: swatches.canvas,
+          backgroundImage: `linear-gradient(color-mix(in srgb, ${swatches.canvas} 55%, transparent), color-mix(in srgb, ${swatches.canvas} 70%, transparent)), url(${theme.wallpaper})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
           borderColor: swatches.line,
         }}
       >

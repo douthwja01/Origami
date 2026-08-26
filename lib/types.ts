@@ -31,6 +31,11 @@ export type ProjectDTO = {
   startDate: string;
   status: ProjectStatus;
   parentId: string | null;
+  githubUrl: string | null;
+  websiteUrl: string | null;
+  mediaBackground: boolean;
+  mediaBackgroundCycle: boolean;
+  mediaBackgroundOpacity: number;
   createdAt: string;
   updatedAt: string;
   childCount: number;

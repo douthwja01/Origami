@@ -13,6 +13,8 @@ type ProjectMeta = {
   startDate: string;
   status: string;
   parentId: string | null;
+  githubUrl: string | null;
+  websiteUrl: string | null;
 };
 
 type AssetFingerprint = {
@@ -77,6 +79,8 @@ export class ProjectChecksum {
         startDate: project.startDate,
         status: project.status,
         parentId: project.parentId,
+        githubUrl: project.githubUrl,
+        websiteUrl: project.websiteUrl,
       },
       fileRows,
     );
@@ -90,6 +94,8 @@ export class ProjectChecksum {
       `startDate:${meta.startDate}`,
       `status:${meta.status}`,
       `parentId:${meta.parentId ?? ""}`,
+      `githubUrl:${meta.githubUrl ?? ""}`,
+      `websiteUrl:${meta.websiteUrl ?? ""}`,
       "assets:",
     ];
     const sorted = [...fingerprints].sort((a, b) => a.id.localeCompare(b.id));

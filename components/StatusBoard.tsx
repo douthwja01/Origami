@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useProjects } from "@/components/ProjectsContext";
+import { useProjectDisplay } from "@/components/ProjectDisplayContext";
 import { formatDate, statusLabel } from "@/lib/format";
 import { BOARD_STATUSES, type ProjectDTO, type ProjectStatus } from "@/lib/types";
 
 export function StatusBoard() {
   const { projects, loading } = useProjects();
+  const { settings } = useProjectDisplay();
   const [scope, setScope] = useState<"top" | "all">("top");
 
   const visible = useMemo(() => {
@@ -34,7 +36,9 @@ export function StatusBoard() {
     <div>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-[22px] font-medium tracking-tight">Workshop</h1>
+          <h1 className="text-[22px] font-medium tracking-tight">
+            {settings.vaultName}
+          </h1>
           <p className="text-[13px] text-muted">
             Nested projects and a vault for media, code, documents, and CAD.
           </p>

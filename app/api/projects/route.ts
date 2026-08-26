@@ -1,5 +1,5 @@
 import { json, isResponse, requireUser } from "@/lib/api";
-import { createProject, listProjects } from "@/lib/projects";
+import { createProject, listProjects, parseOptionalHttpUrl } from "@/lib/projects";
 import { isStatus } from "@/lib/types";
 
 export async function GET() {
@@ -19,6 +19,8 @@ export async function POST(request: Request) {
     status?: string;
     parentId?: string | null;
     code?: string;
+    githubUrl?: string | null;
+    websiteUrl?: string | null;
   };
   try {
     body = await request.json();
@@ -35,6 +37,15 @@ export async function POST(request: Request) {
   const status = body.status ?? "planned";
   if (!isStatus(status)) return json({ error: "Invalid status" }, 400);
 
+  let githubUrl: string | null;
+  let websiteUrl: string | null;
+  try {
+    githubUrl = parseOptionalHttpUrl(body.githubUrl, "GitHub URL");
+    websiteUrl = parseOptionalHttpUrl(body.websiteUrl, "Website URL");
+  } catch (error) {
+    return json({ error: (error as Error).message }, 400);
+  }
+
   try {
     const project = await createProject({
       title,
@@ -42,6 +53,8 @@ export async function POST(request: Request) {
       status,
       parentId: body.parentId || null,
       code: body.code,
+      githubUrl,
+      websiteUrl,
     });
     return json({ project }, 201);
   } catch (error) {

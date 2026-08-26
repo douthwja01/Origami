@@ -5,6 +5,11 @@ export const SETTINGS_NAV = [
     description: "Assign a visual theme without changing layout",
   },
   {
+    href: "/settings/projects",
+    label: "Projects",
+    description: "Vault name shown on the home screen and in navigation",
+  },
+  {
     href: "/settings/backups",
     label: "Backups",
     description: "Schedule project archives and download a full vault snapshot",

@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { findTreeNode, useProjects } from "@/components/ProjectsContext";
+import { useProjectDisplay } from "@/components/ProjectDisplayContext";
 import { ProjectTree } from "@/components/ProjectTree";
 
 export function ProjectSidebar({ projectId }: { projectId: string }) {
   const { projects, tree, loading } = useProjects();
+  const { settings } = useProjectDisplay();
   const project = projects.find((item) => item.id === projectId);
   const node = findTreeNode(tree, projectId);
   const parent = project?.parentId
@@ -24,7 +26,7 @@ export function ProjectSidebar({ projectId }: { projectId: string }) {
           </Link>
         ) : (
           <Link href="/" className="text-[12px] text-muted hover:text-ink">
-            ← Workshop
+            ← {settings.vaultName}
           </Link>
         )}
         {project ? (
