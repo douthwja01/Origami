@@ -5,7 +5,7 @@ import { isStatus } from "@/lib/shared/types";
 export async function GET() {
   const user = await requireUser();
   if (isResponse(user)) return user;
-  const projects = await listProjects();
+  const projects = await listProjects(user.id);
   return json({ projects });
 }
 
@@ -21,6 +21,8 @@ export async function POST(request: Request) {
     code?: string;
     githubUrl?: string | null;
     websiteUrl?: string | null;
+    visibility?: string;
+    teamId?: string | null;
   };
   try {
     body = await request.json();
@@ -47,6 +49,12 @@ export async function POST(request: Request) {
   }
 
   try {
+    const visibility =
+      body.visibility === "personal" || body.visibility === "team"
+        ? body.visibility
+        : body.parentId
+          ? undefined
+          : "team";
     const project = await createProject({
       title,
       startDate,
@@ -55,6 +63,9 @@ export async function POST(request: Request) {
       code: body.code,
       githubUrl,
       websiteUrl,
+      userId: user.id,
+      visibility,
+      teamId: body.teamId ?? null,
     });
     return json({ project }, 201);
   } catch (error) {

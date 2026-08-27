@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import pg from "pg";
+import bcrypt from "bcryptjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -25,6 +26,60 @@ function loadDotEnv() {
 }
 
 loadDotEnv();
+
+loadDotEnv();
+
+async function bootstrapUsersAndTeams(client) {
+  const existing = await client.query(`SELECT 1 FROM users LIMIT 1`);
+  if (existing.rowCount > 0) {
+    return;
+  }
+
+  const username = (process.env.ORIGAMI_USER || "admin").trim();
+  let passwordHash = process.env.ORIGAMI_PASSWORD_HASH?.trim();
+  const plain = process.env.ORIGAMI_PASSWORD;
+
+  if (!passwordHash) {
+    if (!plain) {
+      throw new Error(
+        "No users exist yet. Set ORIGAMI_PASSWORD or ORIGAMI_PASSWORD_HASH before first run.",
+      );
+    }
+    passwordHash = bcrypt.hashSync(plain, 12);
+  }
+
+  const userResult = await client.query(
+    `INSERT INTO users (username, password_hash)
+     VALUES ($1, $2)
+     RETURNING id`,
+    [username, passwordHash],
+  );
+  const userId = userResult.rows[0].id;
+
+  const teamResult = await client.query(
+    `INSERT INTO teams (name, slug)
+     VALUES ('Workshop', 'workshop')
+     RETURNING id`,
+  );
+  const teamId = teamResult.rows[0].id;
+
+  await client.query(
+    `INSERT INTO team_members (team_id, user_id, role)
+     VALUES ($1, $2, 'owner')`,
+    [teamId, userId],
+  );
+
+  await client.query(
+    `UPDATE projects
+     SET visibility = 'team',
+         team_id = $1,
+         created_by_user_id = $2
+     WHERE team_id IS NULL`,
+    [teamId, userId],
+  );
+
+  console.log(`Bootstrapped admin user "${username}" and default team "Workshop"`);
+}
 
 export async function runMigrations() {
   const url = process.env.DATABASE_URL;
@@ -127,6 +182,8 @@ export async function runMigrations() {
     ON CONFLICT DO NOTHING
   `);
   await client.query(`DELETE FROM "tags" WHERE "key" = 'documents'`);
+
+  await bootstrapUsersAndTeams(client);
 
   await client.end();
   console.log("Migrations complete");

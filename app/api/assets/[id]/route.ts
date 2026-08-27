@@ -2,6 +2,7 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { json, isResponse, requireUser } from "@/lib/shared/api";
+import { requireAccessibleProject } from "@/lib/auth/access";
 import { deleteAssetRow, getAsset, updateAsset } from "@/lib/projects/projects";
 import { isKind } from "@/lib/shared/types";
 import { absoluteFromStorage, removeVaultFile } from "@/lib/vault/vault";
@@ -16,6 +17,9 @@ export async function GET(request: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   const asset = await getAsset(id);
   if (!asset) return json({ error: "Asset not found" }, 404);
+
+  const access = await requireAccessibleProject(user, asset.projectId, "view");
+  if (access instanceof Response) return access;
 
   const abs = absoluteFromStorage(asset.storagePath);
   let fileStat;
@@ -64,6 +68,11 @@ export async function PATCH(request: Request, ctx: Ctx) {
     return json({ error: "Invalid kind" }, 400);
   }
 
+  const existing = await getAsset(id);
+  if (!existing) return json({ error: "Asset not found" }, 404);
+  const access = await requireAccessibleProject(user, existing.projectId, "edit");
+  if (access instanceof Response) return access;
+
   try {
     const asset = await updateAsset(id, {
       kind: body.kind,
@@ -83,6 +92,9 @@ export async function DELETE(_request: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   const asset = await getAsset(id);
   if (!asset) return json({ error: "Asset not found" }, 404);
+
+  const access = await requireAccessibleProject(user, asset.projectId, "edit");
+  if (access instanceof Response) return access;
 
   await removeVaultFile(asset.storagePath);
   await deleteAssetRow(id);

@@ -37,12 +37,97 @@ export const mediaBackgroundMode = pgEnum("media_background_mode", [
   "fixed",
 ]);
 
+export const projectVisibility = pgEnum("project_visibility", [
+  "personal",
+  "team",
+]);
+
+export const teamRole = pgEnum("team_role", ["owner", "admin", "member"]);
+
 export const projectCodeSeq = pgSequence("project_code_seq", {
   startWith: 1,
   increment: 1,
   minValue: 1,
   cache: 1,
 });
+
+export const users = pgTable(
+  "users",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    username: text("username").notNull().unique(),
+    passwordHash: text("password_hash").notNull(),
+    displayName: text("display_name"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("users_username_idx").on(table.username)],
+);
+
+export const teams = pgTable(
+  "teams",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("teams_slug_idx").on(table.slug)],
+);
+
+export const teamMembers = pgTable(
+  "team_members",
+  {
+    teamId: uuid("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: teamRole("role").notNull().default("member"),
+    joinedAt: timestamp("joined_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.teamId, table.userId] }),
+    index("team_members_user_id_idx").on(table.userId),
+  ],
+);
+
+export const teamInvites = pgTable(
+  "team_invites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    username: text("username").notNull(),
+    token: text("token").notNull().unique(),
+    role: teamRole("role").notNull().default("member"),
+    invitedByUserId: uuid("invited_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("team_invites_team_id_idx").on(table.teamId),
+    index("team_invites_username_idx").on(table.username),
+  ],
+);
 
 export const projects = pgTable(
   "projects",
@@ -74,6 +159,16 @@ export const projects = pgTable(
     checksumAt: timestamp("checksum_at", { withTimezone: true }),
     lastBackupChecksum: text("last_backup_checksum"),
     lastBackupAt: timestamp("last_backup_at", { withTimezone: true }),
+    visibility: projectVisibility("visibility").notNull().default("team"),
+    ownerUserId: uuid("owner_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    teamId: uuid("team_id").references(() => teams.id, {
+      onDelete: "set null",
+    }),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -84,6 +179,8 @@ export const projects = pgTable(
   (table) => [
     index("projects_parent_id_idx").on(table.parentId),
     index("projects_status_idx").on(table.status),
+    index("projects_owner_user_id_idx").on(table.ownerUserId),
+    index("projects_team_id_idx").on(table.teamId),
   ],
 );
 

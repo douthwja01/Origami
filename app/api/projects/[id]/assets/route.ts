@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { json, isResponse, requireUser } from "@/lib/shared/api";
+import { requireAccessibleProject } from "@/lib/auth/access";
 import { normalizeFolderPath } from "@/lib/vault/folder-path";
 import { inferKind } from "@/lib/vault/kinds";
 import { isHiddenFolderPath } from "@/lib/projects/project-background";
-import { getProjectRow, insertAsset } from "@/lib/projects/projects";
+import { insertAsset } from "@/lib/projects/projects";
 import { formatBytes } from "@/lib/shared/format";
 import { resolveMaxUploadBytes } from "@/lib/settings/upload-settings";
 import { removeVaultFile, writeVaultFile } from "@/lib/vault/vault";
@@ -17,8 +18,8 @@ export async function POST(request: Request, ctx: Ctx) {
   if (isResponse(user)) return user;
   const { id: projectId } = await ctx.params;
 
-  const project = await getProjectRow(projectId);
-  if (!project) return json({ error: "Project not found" }, 404);
+  const project = await requireAccessibleProject(user, projectId, "edit");
+  if (project instanceof Response) return project;
 
   let form: FormData;
   try {

@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { json, isResponse, requireUser } from "@/lib/shared/api";
+import { requireAccessibleProject } from "@/lib/auth/access";
 import { formatBytes } from "@/lib/shared/format";
 import { isPreviewableImage } from "@/lib/vault/kinds";
 import { PROJECT_BACKGROUND_FOLDER } from "@/lib/projects/project-background";
 import {
   clearBackgroundFolderAssets,
   ensureProjectFolder,
-  getProjectRow,
   insertAsset,
   updateProject,
 } from "@/lib/projects/projects";
@@ -22,8 +22,8 @@ export async function POST(request: Request, ctx: Ctx) {
   if (isResponse(user)) return user;
   const { id: projectId } = await ctx.params;
 
-  const project = await getProjectRow(projectId);
-  if (!project) return json({ error: "Project not found" }, 404);
+  const project = await requireAccessibleProject(user, projectId, "edit");
+  if (project instanceof Response) return project;
 
   let form: FormData;
   try {
@@ -98,8 +98,8 @@ export async function DELETE(_request: Request, ctx: Ctx) {
   if (isResponse(user)) return user;
   const { id: projectId } = await ctx.params;
 
-  const project = await getProjectRow(projectId);
-  if (!project) return json({ error: "Project not found" }, 404);
+  const project = await requireAccessibleProject(user, projectId, "edit");
+  if (project instanceof Response) return project;
 
   try {
     await clearBackgroundFolderAssets(projectId);

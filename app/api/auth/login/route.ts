@@ -1,5 +1,5 @@
 import { json } from "@/lib/shared/api";
-import { verifyCredentials } from "@/lib/auth/auth";
+import { authenticateUser } from "@/lib/auth/users";
 import { getSession } from "@/lib/auth/session";
 
 export async function POST(request: Request) {
@@ -16,13 +16,14 @@ export async function POST(request: Request) {
     return json({ error: "Username and password are required" }, 400);
   }
 
-  const ok = await verifyCredentials(username, password);
-  if (!ok) {
+  const user = await authenticateUser(username, password);
+  if (!user) {
     return json({ error: "Invalid username or password" }, 401);
   }
 
   const session = await getSession();
-  session.user = username;
+  session.userId = user.id;
+  session.user = user.username;
   await session.save();
-  return json({ user: username });
+  return json({ user: user.username, userId: user.id, displayName: user.displayName });
 }

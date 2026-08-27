@@ -1,4 +1,5 @@
 import { json, isResponse, requireUser } from "@/lib/shared/api";
+import { requireAccessibleProject } from "@/lib/auth/access";
 import { getAsset } from "@/lib/projects/projects";
 import { parseTagNames, setAssetTags } from "@/lib/tags/tags";
 
@@ -10,6 +11,9 @@ export async function PUT(request: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   const asset = await getAsset(id);
   if (!asset) return json({ error: "Asset not found" }, 404);
+
+  const access = await requireAccessibleProject(user, asset.projectId, "edit");
+  if (access instanceof Response) return access;
 
   let body: { names?: unknown };
   try {

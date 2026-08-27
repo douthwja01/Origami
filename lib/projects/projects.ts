@@ -1,7 +1,10 @@
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { backupArchivedProject } from "@/lib/backups/backup";
+import { accessibleProjectIds } from "@/lib/auth/access";
+import { getUserById } from "@/lib/auth/users";
+import { getTeamMembership } from "@/lib/teams/teams";
 import { getDb } from "@/lib/db";
-import { assets, projectFolders, projects } from "@/lib/db/schema";
+import { assets, projectFolders, projects, teams } from "@/lib/db/schema";
 import {
   isUnderFolderPath,
   joinFolderPath,
@@ -26,6 +29,7 @@ import type {
   FolderDTO,
   ProjectDTO,
   ProjectStatus,
+  ProjectVisibility,
   TagDTO,
 } from "@/lib/shared/types";
 import {
@@ -34,6 +38,13 @@ import {
   renameVaultFile,
   safeFilename,
 } from "@/lib/vault/vault";
+import { logOrigami } from "@/lib/settings/log";
+
+async function logActor(userId: string | undefined): Promise<string> {
+  if (!userId) return "system";
+  const user = await getUserById(userId);
+  return user?.username ?? userId;
+}
 
 function emptyKinds(): Record<AssetKind, number> {
   return { media: 0, code: 0, document: 0, cad: 0, backup: 0 };
@@ -44,6 +55,7 @@ export function toProjectDTO(
   childCount: number,
   assetsByKind: Record<AssetKind, number>,
   thumbnailAssetId: string | null = null,
+  teamName: string | null = null,
 ): ProjectDTO {
   const assetCount = Object.values(assetsByKind).reduce((a, b) => a + b, 0);
   return {
@@ -60,6 +72,11 @@ export function toProjectDTO(
     mediaBackgroundCycle: row.mediaBackgroundCycle,
     mediaBackgroundOpacity: row.mediaBackgroundOpacity,
     thumbnailAssetId: thumbnailAssetId ?? row.mediaBackgroundAssetId,
+    visibility: row.visibility,
+    ownerUserId: row.ownerUserId,
+    teamId: row.teamId,
+    teamName,
+    createdByUserId: row.createdByUserId,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     childCount,
@@ -99,9 +116,22 @@ export function toFolderDTO(
   };
 }
 
-export async function listProjects(): Promise<ProjectDTO[]> {
+export async function listProjects(userId: string): Promise<ProjectDTO[]> {
   const db = getDb();
-  const rows = await db.select().from(projects).orderBy(asc(projects.code));
+  const allowedIds = await accessibleProjectIds(userId);
+  if (allowedIds.length === 0) {
+    return [];
+  }
+
+  const rows = await db
+    .select({
+      project: projects,
+      teamName: teams.name,
+    })
+    .from(projects)
+    .leftJoin(teams, eq(projects.teamId, teams.id))
+    .where(inArray(projects.id, allowedIds))
+    .orderBy(asc(projects.code));
   const assetRows = await db
     .select({
       projectId: assets.projectId,
@@ -120,24 +150,28 @@ export async function listProjects(): Promise<ProjectDTO[]> {
 
   const childMap = new Map<string, number>();
   for (const row of rows) {
-    if (row.parentId) {
-      childMap.set(row.parentId, (childMap.get(row.parentId) ?? 0) + 1);
+    if (row.project.parentId) {
+      childMap.set(
+        row.project.parentId,
+        (childMap.get(row.project.parentId) ?? 0) + 1,
+      );
     }
   }
 
   const thumbnailMap = await loadThumbnailAssetIds(
     rows.map((row) => ({
-      id: row.id,
-      mediaBackgroundAssetId: row.mediaBackgroundAssetId,
+      id: row.project.id,
+      mediaBackgroundAssetId: row.project.mediaBackgroundAssetId,
     })),
   );
 
   return rows.map((row) =>
     toProjectDTO(
-      row,
-      childMap.get(row.id) ?? 0,
-      kindMap.get(row.id) ?? emptyKinds(),
-      thumbnailMap.get(row.id) ?? null,
+      row.project,
+      childMap.get(row.project.id) ?? 0,
+      kindMap.get(row.project.id) ?? emptyKinds(),
+      thumbnailMap.get(row.project.id) ?? null,
+      row.teamName,
     ),
   );
 }
@@ -220,12 +254,26 @@ export async function getProjectByCode(code: string) {
 export async function getProjectByTitle(
   title: string,
   excludeId?: string | null,
+  scope?: {
+    visibility: ProjectVisibility;
+    ownerUserId?: string | null;
+    teamId?: string | null;
+  },
 ) {
   const db = getDb();
   const normalized = title.trim().toLowerCase();
   if (!normalized) return null;
   const conditions = [sql`lower(${projects.title}) = ${normalized}`];
   if (excludeId) conditions.push(ne(projects.id, excludeId));
+  if (scope) {
+    conditions.push(eq(projects.visibility, scope.visibility));
+    if (scope.visibility === "personal" && scope.ownerUserId) {
+      conditions.push(eq(projects.ownerUserId, scope.ownerUserId));
+    }
+    if (scope.visibility === "team" && scope.teamId) {
+      conditions.push(eq(projects.teamId, scope.teamId));
+    }
+  }
   const [row] = await db
     .select()
     .from(projects)
@@ -296,20 +344,51 @@ export async function createProject(input: {
   code?: string;
   githubUrl?: string | null;
   websiteUrl?: string | null;
+  userId: string;
+  visibility?: ProjectVisibility;
+  teamId?: string | null;
 }): Promise<ProjectDTO> {
   const db = getDb();
+  let visibility: ProjectVisibility = input.visibility ?? "team";
+  let ownerUserId: string | null = input.userId;
+  let teamId: string | null = input.teamId ?? null;
+
   if (input.parentId) {
     const parent = await getProjectRow(input.parentId);
     if (!parent) {
       throw Object.assign(new Error("Parent project not found"), { status: 400 });
     }
+    visibility = parent.visibility;
+    ownerUserId = parent.ownerUserId;
+    teamId = parent.teamId;
+  } else if (visibility === "personal") {
+    ownerUserId = input.userId;
+    teamId = null;
+  } else {
+    if (!teamId) {
+      throw Object.assign(new Error("Team is required for team projects"), {
+        status: 400,
+      });
+    }
+    const role = await getTeamMembership(teamId, input.userId);
+    if (!role) {
+      throw Object.assign(new Error("You are not a member of this team"), {
+        status: 403,
+      });
+    }
+    ownerUserId = null;
   }
+
   const code = input.code?.trim() || (await nextProjectCode(input.parentId));
   const existing = await getProjectByCode(code);
   if (existing) {
     throw Object.assign(new Error("Project ID already exists"), { status: 409 });
   }
-  const titleClash = await getProjectByTitle(input.title);
+  const titleClash = await getProjectByTitle(input.title, null, {
+    visibility,
+    ownerUserId,
+    teamId,
+  });
   if (titleClash) {
     throw Object.assign(new Error("Project name already exists"), { status: 409 });
   }
@@ -323,12 +402,33 @@ export async function createProject(input: {
       parentId: input.parentId,
       githubUrl: input.githubUrl ?? null,
       websiteUrl: input.websiteUrl ?? null,
+      visibility,
+      ownerUserId,
+      teamId,
+      createdByUserId: input.userId,
     })
     .returning();
   if (row.status === "archived") {
     await backupArchivedProject(row);
   }
-  return toProjectDTO(row, 0, emptyKinds());
+
+  let teamName: string | null = null;
+  if (row.teamId) {
+    const [team] = await db
+      .select({ name: teams.name })
+      .from(teams)
+      .where(eq(teams.id, row.teamId))
+      .limit(1);
+    teamName = team?.name ?? null;
+  }
+
+  const actor = await logActor(input.userId);
+  logOrigami(
+    "info",
+    `project created (${row.code}: ${row.title}) by ${actor}`,
+  );
+
+  return toProjectDTO(row, 0, emptyKinds(), null, teamName);
 }
 
 export async function wouldCreateCycle(
@@ -369,6 +469,7 @@ export async function updateProject(
     mediaBackgroundCycle?: boolean;
     mediaBackgroundOpacity?: number;
   },
+  userId?: string,
 ): Promise<ProjectDTO> {
   const db = getDb();
   const existing = await getProjectRow(id);
@@ -382,7 +483,11 @@ export async function updateProject(
     }
   }
   if (patch.title !== undefined) {
-    const titleClash = await getProjectByTitle(patch.title, id);
+    const titleClash = await getProjectByTitle(patch.title, id, {
+      visibility: existing.visibility,
+      ownerUserId: existing.ownerUserId,
+      teamId: existing.teamId,
+    });
     if (titleClash) {
       throw Object.assign(new Error("Project name already exists"), {
         status: 409,
@@ -435,12 +540,32 @@ export async function updateProject(
     await backupArchivedProject(row);
   }
 
-  const all = await listProjects();
-  const dto = all.find((p) => p.id === row.id);
-  if (!dto) {
-    throw new Error("Failed to load updated project");
+  const actor = await logActor(userId);
+  logOrigami(
+    "info",
+    `project updated (${row.code}: ${row.title}) by ${actor}`,
+  );
+
+  if (userId) {
+    const all = await listProjects(userId);
+    const dto = all.find((p) => p.id === row.id);
+    if (!dto) {
+      throw Object.assign(new Error("Project not found"), { status: 404 });
+    }
+    return dto;
   }
-  return dto;
+
+  let teamName: string | null = null;
+  if (row.teamId) {
+    const [team] = await db
+      .select({ name: teams.name })
+      .from(teams)
+      .where(eq(teams.id, row.teamId))
+      .limit(1);
+    teamName = team?.name ?? null;
+  }
+
+  return toProjectDTO(row, 0, emptyKinds(), null, teamName);
 }
 
 export async function descendantIds(rootId: string): Promise<string[]> {
@@ -463,12 +588,24 @@ export async function descendantIds(rootId: string): Promise<string[]> {
   return out;
 }
 
-export async function deleteProject(id: string, cascade: boolean): Promise<void> {
+export async function deleteProject(
+  id: string,
+  cascade: boolean,
+  actorUserId?: string,
+): Promise<void> {
   const db = getDb();
   const existing = await getProjectRow(id);
   if (!existing) {
     throw Object.assign(new Error("Project not found"), { status: 404 });
   }
+
+  const actor = await logActor(actorUserId);
+  logOrigami(
+    "info",
+    `project deleted (${existing.code}: ${existing.title}) by ${actor}${
+      cascade ? " (cascade)" : ""
+    }`,
+  );
 
   const kids = await descendantIds(id);
   if (!cascade && kids.length > 0) {
@@ -1074,8 +1211,11 @@ export async function deleteAssetRow(id: string) {
   return row ?? null;
 }
 
-export async function ancestorsOf(id: string): Promise<ProjectDTO[]> {
-  const all = await listProjects();
+export async function ancestorsOf(
+  id: string,
+  userId: string,
+): Promise<ProjectDTO[]> {
+  const all = await listProjects(userId);
   const byId = new Map(all.map((p) => [p.id, p]));
   const chain: ProjectDTO[] = [];
   let current = byId.get(id);
@@ -1091,7 +1231,10 @@ export async function ancestorsOf(id: string): Promise<ProjectDTO[]> {
   return chain;
 }
 
-export async function childrenOf(id: string): Promise<ProjectDTO[]> {
-  const all = await listProjects();
+export async function childrenOf(
+  id: string,
+  userId: string,
+): Promise<ProjectDTO[]> {
+  const all = await listProjects(userId);
   return all.filter((p) => p.parentId === id);
 }

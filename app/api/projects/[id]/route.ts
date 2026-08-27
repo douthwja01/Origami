@@ -1,4 +1,5 @@
 import { json, isResponse, requireUser } from "@/lib/shared/api";
+import { requireAccessibleProject } from "@/lib/auth/access";
 import {
   clampMediaBackgroundOpacity,
   isMediaBackgroundMode,
@@ -8,7 +9,6 @@ import {
   ancestorsOf,
   childrenOf,
   deleteProject,
-  getProjectRow,
   listAssets,
   listFolders,
   listProjects,
@@ -24,16 +24,16 @@ export async function GET(_request: Request, ctx: Ctx) {
   const user = await requireUser();
   if (isResponse(user)) return user;
   const { id } = await ctx.params;
-  const row = await getProjectRow(id);
-  if (!row) return json({ error: "Project not found" }, 404);
+  const access = await requireAccessibleProject(user, id, "view");
+  if (access instanceof Response) return access;
 
-  const all = await listProjects();
+  const all = await listProjects(user.id);
   const project = all.find((p) => p.id === id);
   if (!project) return json({ error: "Project not found" }, 404);
 
   const [ancestors, children, assetList, folderList, tagList] = await Promise.all([
-    ancestorsOf(id),
-    childrenOf(id),
+    ancestorsOf(id, user.id),
+    childrenOf(id, user.id),
     listAssets(id),
     listFolders(id),
     listProjectTags(id),
@@ -53,6 +53,8 @@ export async function PATCH(request: Request, ctx: Ctx) {
   const user = await requireUser();
   if (isResponse(user)) return user;
   const { id } = await ctx.params;
+  const access = await requireAccessibleProject(user, id, "edit");
+  if (access instanceof Response) return access;
 
   let body: {
     title?: string;
@@ -114,27 +116,31 @@ export async function PATCH(request: Request, ctx: Ctx) {
   }
 
   try {
-    const project = await updateProject(id, {
-      title: body.title,
-      startDate: body.startDate,
-      status: body.status,
-      parentId: body.parentId,
-      code: body.code,
-      githubUrl,
-      websiteUrl,
-      mediaBackgroundMode:
-        body.mediaBackgroundMode === undefined
-          ? undefined
-          : body.mediaBackgroundMode,
-      mediaBackgroundCycle:
-        typeof body.mediaBackgroundCycle === "boolean"
-          ? body.mediaBackgroundCycle
-          : undefined,
-      mediaBackgroundOpacity:
-        body.mediaBackgroundOpacity === undefined
-          ? undefined
-          : clampMediaBackgroundOpacity(Number(body.mediaBackgroundOpacity)),
-    });
+    const project = await updateProject(
+      id,
+      {
+        title: body.title,
+        startDate: body.startDate,
+        status: body.status,
+        parentId: body.parentId,
+        code: body.code,
+        githubUrl,
+        websiteUrl,
+        mediaBackgroundMode:
+          body.mediaBackgroundMode === undefined
+            ? undefined
+            : body.mediaBackgroundMode,
+        mediaBackgroundCycle:
+          typeof body.mediaBackgroundCycle === "boolean"
+            ? body.mediaBackgroundCycle
+            : undefined,
+        mediaBackgroundOpacity:
+          body.mediaBackgroundOpacity === undefined
+            ? undefined
+            : clampMediaBackgroundOpacity(Number(body.mediaBackgroundOpacity)),
+      },
+      user.id,
+    );
     return json({ project });
   } catch (error) {
     const statusCode = (error as { status?: number }).status ?? 500;
@@ -146,11 +152,13 @@ export async function DELETE(request: Request, ctx: Ctx) {
   const user = await requireUser();
   if (isResponse(user)) return user;
   const { id } = await ctx.params;
+  const access = await requireAccessibleProject(user, id, "delete");
+  if (access instanceof Response) return access;
   const url = new URL(request.url);
   const cascade = url.searchParams.get("cascade") === "1";
 
   try {
-    await deleteProject(id, cascade);
+    await deleteProject(id, cascade, user.id);
     return json({ ok: true });
   } catch (error) {
     const statusCode = (error as { status?: number }).status ?? 500;

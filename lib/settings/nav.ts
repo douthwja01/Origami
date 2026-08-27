@@ -25,9 +25,19 @@ export const SETTINGS_NAV = [
     description: "Inspect recent application output and download a log snippet",
   },
   {
+    href: "/settings/team",
+    label: "Team",
+    description: "Invite collaborators and manage who can access team projects",
+  },
+  {
+    href: "/settings/create-user",
+    label: "Create User",
+    description: "Add a new username and password for someone on your team",
+  },
+  {
     href: "/settings/account",
     label: "Account",
-    description: "Signed-in user and how login credentials are configured",
+    description: "Signed-in user and password",
   },
 ] as const;
 

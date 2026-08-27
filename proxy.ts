@@ -17,6 +17,10 @@ export async function proxy(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const isLogin = path === "/login" || path === "/api/auth/login";
+  const isInvite =
+    path === "/accept-invite" ||
+    path === "/api/teams/invites/accept" ||
+    path.startsWith("/api/teams/invites/");
   const isPublicAsset =
     path.startsWith("/_next") ||
     path === "/favicon.ico" ||
@@ -24,14 +28,16 @@ export async function proxy(request: NextRequest) {
 
   if (isPublicAsset) return response;
 
-  if (!session.user && !isLogin) {
+  const isAuthed = Boolean(session.userId || session.user);
+
+  if (!isAuthed && !isLogin && !isInvite) {
     if (path.startsWith("/api/")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (session.user && path === "/login") {
+  if (isAuthed && path === "/login") {
     return NextResponse.redirect(new URL("/", request.url));
   }
 

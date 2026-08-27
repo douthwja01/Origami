@@ -1,5 +1,5 @@
 import { json, isResponse, requireUser } from "@/lib/shared/api";
-import { getProjectRow } from "@/lib/projects/projects";
+import { requireAccessibleProject } from "@/lib/auth/access";
 import { parseTagNames, setFolderTags } from "@/lib/tags/tags";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -8,8 +8,8 @@ export async function PUT(request: Request, ctx: Ctx) {
   const user = await requireUser();
   if (isResponse(user)) return user;
   const { id: projectId } = await ctx.params;
-  const project = await getProjectRow(projectId);
-  if (!project) return json({ error: "Project not found" }, 404);
+  const project = await requireAccessibleProject(user, projectId, "edit");
+  if (project instanceof Response) return project;
 
   let body: { path?: unknown; names?: unknown };
   try {

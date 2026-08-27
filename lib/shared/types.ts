@@ -42,6 +42,8 @@ export const PROJECT_ASSET_KINDS = [
 
 export type ProjectAssetKind = (typeof PROJECT_ASSET_KINDS)[number];
 
+export type ProjectVisibility = "personal" | "team";
+
 export type ProjectDTO = {
   id: string;
   code: string;
@@ -56,6 +58,11 @@ export type ProjectDTO = {
   mediaBackgroundCycle: boolean;
   mediaBackgroundOpacity: number;
   thumbnailAssetId: string | null;
+  visibility: ProjectVisibility;
+  ownerUserId: string | null;
+  teamId: string | null;
+  teamName: string | null;
+  createdByUserId: string | null;
   createdAt: string;
   updatedAt: string;
   childCount: number;

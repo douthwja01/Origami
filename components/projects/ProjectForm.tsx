@@ -5,7 +5,13 @@ import { useRouter } from "next/navigation";
 import { descendantIdSet, useProjects } from "@/components/projects/ProjectsContext";
 import { todayIso, statusLabel } from "@/lib/shared/format";
 import { nextChildCode } from "@/lib/projects/project-code";
-import { STATUSES, type ProjectDTO, type ProjectStatus } from "@/lib/shared/types";
+import type { TeamDTO } from "@/lib/teams/team-types";
+import {
+  STATUSES,
+  type ProjectDTO,
+  type ProjectStatus,
+  type ProjectVisibility,
+} from "@/lib/shared/types";
 
 type Props = {
   title: string;
@@ -41,6 +47,11 @@ export function ProjectForm({
   );
   const [githubUrl, setGithubUrl] = useState(project?.githubUrl ?? "");
   const [websiteUrl, setWebsiteUrl] = useState(project?.websiteUrl ?? "");
+  const [visibility, setVisibility] = useState<ProjectVisibility>(
+    project?.visibility ?? "team",
+  );
+  const [teamId, setTeamId] = useState(project?.teamId ?? "");
+  const [teams, setTeams] = useState<TeamDTO[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [attempted, setAttempted] = useState(false);
@@ -87,6 +98,18 @@ export function ProjectForm({
   const hasClash = Boolean(nameError || codeError);
 
   useEffect(() => {
+    if (project || parentId) return;
+    void (async () => {
+      const res = await fetch("/api/teams");
+      const data = await res.json();
+      if (res.ok && data.teams?.length) {
+        setTeams(data.teams);
+        setTeamId((current) => current || data.teams[0].id);
+      }
+    })();
+  }, [project, parentId]);
+
+  useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
     }
@@ -111,6 +134,12 @@ export function ProjectForm({
       githubUrl: githubUrl.trim(),
       websiteUrl: websiteUrl.trim(),
       ...(code.trim() ? { code: code.trim() } : {}),
+      ...(!project && !parentId
+        ? {
+            visibility,
+            teamId: visibility === "team" ? teamId || null : null,
+          }
+        : {}),
     };
     const res = await fetch(
       project ? `/api/projects/${project.id}` : "/api/projects",
@@ -235,6 +264,46 @@ export function ProjectForm({
             </select>
           </label>
         </div>
+        {!project && !parentId ? (
+          <div className="mb-4 grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted">
+                Visibility
+              </span>
+              <select
+                value={visibility}
+                onChange={(e) =>
+                  setVisibility(e.target.value as ProjectVisibility)
+                }
+                className={`${fieldClass(false)} text-[13px]`}
+              >
+                <option value="team">Team — shared with your team</option>
+                <option value="personal">Personal — only you</option>
+              </select>
+            </label>
+            {visibility === "team" ? (
+              <label className="block">
+                <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted">
+                  Team
+                </span>
+                <select
+                  required
+                  value={teamId}
+                  onChange={(e) => setTeamId(e.target.value)}
+                  className={`${fieldClass(false)} text-[13px]`}
+                >
+                  {teams.map((team) => (
+                    <option key={team.id} value={team.id}>
+                      {team.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <div />
+            )}
+          </div>
+        ) : null}
         <label className="mb-3 block">
           <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted">
             GitHub URL

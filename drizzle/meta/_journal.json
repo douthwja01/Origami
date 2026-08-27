@@ -141,6 +141,13 @@
       "when": 1787755200000,
       "tag": "0019_vault_logo",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1787756200000,
+      "tag": "0020_users_teams",
+      "breakpoints": true
     }
   ]
 }

@@ -97,6 +97,17 @@ export function installLogCapture() {
   enqueueWrite(formatLine("info", ["[origami] log capture started"]));
 }
 
+export function logOrigami(
+  level: "info" | "warn" | "error",
+  message: string,
+  error?: unknown,
+) {
+  installLogCapture();
+  const line = `[origami] ${message}`;
+  if (error !== undefined) console[level](line, error);
+  else console[level](line);
+}
+
 async function tailLines(
   filePath: string,
   maxLines: number,

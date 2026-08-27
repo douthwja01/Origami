@@ -1,9 +1,9 @@
 import { json, isResponse, requireUser } from "@/lib/shared/api";
+import { requireAccessibleProject } from "@/lib/auth/access";
 import { normalizeFolderPath } from "@/lib/vault/folder-path";
 import {
   createFolder,
   deleteFolder,
-  getProjectRow,
   listFolders,
   renameFolder,
 } from "@/lib/projects/projects";
@@ -16,8 +16,8 @@ export async function GET(_request: Request, ctx: Ctx) {
   const user = await requireUser();
   if (isResponse(user)) return user;
   const { id: projectId } = await ctx.params;
-  const project = await getProjectRow(projectId);
-  if (!project) return json({ error: "Project not found" }, 404);
+  const project = await requireAccessibleProject(user, projectId, "view");
+  if (project instanceof Response) return project;
   const folders = await listFolders(projectId);
   return json({ folders });
 }
@@ -26,8 +26,8 @@ export async function POST(request: Request, ctx: Ctx) {
   const user = await requireUser();
   if (isResponse(user)) return user;
   const { id: projectId } = await ctx.params;
-  const project = await getProjectRow(projectId);
-  if (!project) return json({ error: "Project not found" }, 404);
+  const project = await requireAccessibleProject(user, projectId, "edit");
+  if (project instanceof Response) return project;
 
   let body: { parentPath?: unknown; name?: unknown };
   try {
@@ -58,8 +58,8 @@ export async function PATCH(request: Request, ctx: Ctx) {
   const user = await requireUser();
   if (isResponse(user)) return user;
   const { id: projectId } = await ctx.params;
-  const project = await getProjectRow(projectId);
-  if (!project) return json({ error: "Project not found" }, 404);
+  const project = await requireAccessibleProject(user, projectId, "edit");
+  if (project instanceof Response) return project;
 
   let body: { path?: unknown; name?: unknown };
   try {
@@ -90,8 +90,8 @@ export async function DELETE(request: Request, ctx: Ctx) {
   const user = await requireUser();
   if (isResponse(user)) return user;
   const { id: projectId } = await ctx.params;
-  const project = await getProjectRow(projectId);
-  if (!project) return json({ error: "Project not found" }, 404);
+  const project = await requireAccessibleProject(user, projectId, "edit");
+  if (project instanceof Response) return project;
 
   const url = new URL(request.url);
   const normalized = normalizeFolderPath(url.searchParams.get("path"));
