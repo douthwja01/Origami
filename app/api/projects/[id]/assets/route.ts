@@ -6,6 +6,7 @@ import { inferKind } from "@/lib/vault/kinds";
 import { isHiddenFolderPath } from "@/lib/projects/project-background";
 import { insertAsset } from "@/lib/projects/projects";
 import { formatBytes } from "@/lib/shared/format";
+import { logOrigami } from "@/lib/settings/log";
 import { resolveMaxUploadBytes } from "@/lib/settings/upload-settings";
 import { removeVaultFile, writeVaultFile } from "@/lib/vault/vault";
 
@@ -79,6 +80,13 @@ export async function POST(request: Request, ctx: Ctx) {
       storagePath: written.storagePath,
       contentHash: written.sha256,
     });
+    const location = normalizedFolder
+      ? `${project.code}/${normalizedFolder}`
+      : project.code;
+    logOrigami(
+      "info",
+      `file uploaded (${filename}, ${formatBytes(sizeBytes)}) to ${location} by ${user.username}`,
+    );
     return json({ asset }, 201);
   } catch (error) {
     await removeVaultFile(`${projectId}/${assetId}/${filename}`).catch(

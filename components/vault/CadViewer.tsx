@@ -59,6 +59,9 @@ export function CadViewer({ url, filename }: { url: string; filename: string }) 
     fill.position.set(-4, -1, -2);
     scene.add(fill);
 
+    let grid = createGrid(10);
+    scene.add(grid);
+
     const material = new THREE.MeshStandardMaterial({
       color: 0xc9b8a6,
       metalness: 0.15,
@@ -113,6 +116,24 @@ export function CadViewer({ url, filename }: { url: string; filename: string }) 
         modelRoot.position.sub(settled.getCenter(new THREE.Vector3()));
         modelRoot.updateMatrixWorld(true);
       }
+
+      fitGridToModel();
+    }
+
+    function fitGridToModel() {
+      modelRoot.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(modelRoot, true);
+      if (box.isEmpty()) return;
+
+      const size = box.getSize(new THREE.Vector3());
+      const span = Math.max(size.x, size.z, 1e-6);
+      const gridSize = Math.max(span * 4, 2);
+
+      scene.remove(grid);
+      disposeGrid(grid);
+      grid = createGrid(gridSize);
+      grid.position.y = box.min.y;
+      scene.add(grid);
     }
 
     function frameCameraOnOrigin() {
@@ -203,6 +224,13 @@ export function CadViewer({ url, filename }: { url: string; filename: string }) 
     observer.observe(mount);
     const themeObserver = new MutationObserver(() => {
       scene.background = new THREE.Color(viewerBackgroundColor());
+      const size = grid.userData.gridSize as number;
+      const y = grid.position.y;
+      scene.remove(grid);
+      disposeGrid(grid);
+      grid = createGrid(size);
+      grid.position.y = y;
+      scene.add(grid);
     });
     themeObserver.observe(document.documentElement, {
       attributes: true,
@@ -218,6 +246,7 @@ export function CadViewer({ url, filename }: { url: string; filename: string }) 
       themeObserver.disconnect();
       controls.dispose();
       disposeAxis();
+      disposeGrid(grid);
       material.dispose();
       renderer.dispose();
       axisRenderer.dispose();
@@ -237,6 +266,36 @@ export function CadViewer({ url, filename }: { url: string; filename: string }) 
       />
     </div>
   );
+}
+
+function gridColors() {
+  const light = isLightTheme(document.documentElement.getAttribute("data-theme"));
+  // Faint lines just off the background so the grid reads without competing with the model.
+  return light
+    ? { center: 0xc8c8c8, grid: 0xe0e0e0 }
+    : { center: 0x2e2e2e, grid: 0x1c1c1c };
+}
+
+function createGrid(size: number) {
+  const { center, grid: gridColor } = gridColors();
+  const divisions = 20;
+  const helper = new THREE.GridHelper(size, divisions, center, gridColor);
+  helper.userData.gridSize = size;
+
+  const materials = Array.isArray(helper.material) ? helper.material : [helper.material];
+  for (const mat of materials) {
+    mat.transparent = true;
+    mat.opacity = 0.45;
+    mat.depthWrite = false;
+  }
+
+  return helper;
+}
+
+function disposeGrid(grid: THREE.GridHelper) {
+  grid.geometry.dispose();
+  const materials = Array.isArray(grid.material) ? grid.material : [grid.material];
+  for (const mat of materials) mat.dispose();
 }
 
 function createAxisGroup() {

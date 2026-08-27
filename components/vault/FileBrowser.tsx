@@ -30,13 +30,16 @@ type SortMode = "name" | "date" | "tags";
 
 type Selection =
   | { type: "folder"; path: string }
-  | { type: "file"; id: string }
+  | { type: "files"; ids: string[]; primaryId: string }
   | null;
 
 type MenuState = {
   x: number;
   y: number;
-  target: { type: "file"; id: string } | { type: "folder"; path: string };
+  target:
+    | { type: "file"; id: string }
+    | { type: "folder"; path: string }
+    | { type: "directory" };
 };
 
 type UploadBatchItem = { file: File; folderPath: string };
@@ -70,8 +73,11 @@ export function FileBrowser({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [path, setPath] = useState("");
   const [selection, setSelection] = useState<Selection>(null);
+  const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(
+    null,
+  );
   const [dropTarget, setDropTarget] = useState<string | null>(null);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [draggingIds, setDraggingIds] = useState<string[]>([]);
   const [uploading, setUploading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -314,9 +320,16 @@ export function FileBrowser({
   }, [visibleAssets, filterKind, filtering, path, query, sort, tagFilter]);
 
   const selectedFile = useMemo(() => {
-    if (selection?.type !== "file") return null;
-    return visibleAssets.find((asset) => asset.id === selection.id) ?? null;
+    if (selection?.type !== "files") return null;
+    return (
+      visibleAssets.find((asset) => asset.id === selection.primaryId) ?? null
+    );
   }, [visibleAssets, selection]);
+
+  const selectedFileIds = useMemo(() => {
+    if (selection?.type !== "files") return new Set<string>();
+    return new Set(selection.ids);
+  }, [selection]);
 
   const selectedFolder = useMemo(() => {
     if (selection?.type !== "folder") return null;
@@ -330,6 +343,7 @@ export function FileBrowser({
   const menuAssigned = useMemo(() => {
     if (!menu) return [] as TagDTO[];
     const target = menu.target;
+    if (target.type === "directory") return [] as TagDTO[];
     if (target.type === "file") {
       return visibleAssets.find((asset) => asset.id === target.id)?.tags ?? [];
     }
@@ -337,13 +351,71 @@ export function FileBrowser({
   }, [visibleAssets, folderTagsOf, menu]);
 
   const deleteEnabled =
-    selection?.type === "file" || selection?.type === "folder";
-  const taggable = deleteEnabled;
+    selection?.type === "files" || selection?.type === "folder";
+  const taggable =
+    selection?.type === "folder" ||
+    (selection?.type === "files" && selection.ids.length === 1);
   const headerLabel = filterKind ? kindLabel(filterKind) : rootLabel;
+
+  function clearSelection() {
+    setSelection(null);
+    setSelectionAnchorId(null);
+  }
+
+  function selectSingleFile(assetId: string) {
+    setSelection({ type: "files", ids: [assetId], primaryId: assetId });
+    setSelectionAnchorId(assetId);
+  }
+
+  function selectFileClick(assetId: string, event: React.MouseEvent) {
+    const orderedIds = listedFiles.map((asset) => asset.id);
+
+    if (event.shiftKey) {
+      const anchor =
+        selectionAnchorId ??
+        (selection?.type === "files" ? selection.primaryId : null) ??
+        assetId;
+      const from = orderedIds.indexOf(anchor);
+      const to = orderedIds.indexOf(assetId);
+      if (from >= 0 && to >= 0) {
+        const start = Math.min(from, to);
+        const end = Math.max(from, to);
+        setSelection({
+          type: "files",
+          ids: orderedIds.slice(start, end + 1),
+          primaryId: assetId,
+        });
+        return;
+      }
+    }
+
+    if (event.metaKey || event.ctrlKey) {
+      if (selection?.type === "files") {
+        const next = new Set(selection.ids);
+        if (next.has(assetId)) next.delete(assetId);
+        else next.add(assetId);
+        if (next.size === 0) {
+          clearSelection();
+          return;
+        }
+        const ids = orderedIds.filter((id) => next.has(id));
+        const primaryId = next.has(selection.primaryId)
+          ? selection.primaryId
+          : assetId;
+        setSelection({ type: "files", ids, primaryId });
+        setSelectionAnchorId(assetId);
+        return;
+      }
+      selectSingleFile(assetId);
+      return;
+    }
+
+    selectSingleFile(assetId);
+  }
 
   function openFolder(nextPath: string) {
     setPath(nextPath);
-    setSelection(null);
+    clearSelection();
   }
 
   function goUp() {
@@ -351,7 +423,7 @@ export function FileBrowser({
     const parts = path.split("/");
     parts.pop();
     setPath(parts.join("/"));
-    setSelection(null);
+    clearSelection();
   }
 
   function openItemMenu(
@@ -360,13 +432,23 @@ export function FileBrowser({
   ) {
     event.preventDefault();
     event.stopPropagation();
-    if (target.type === "file") setSelection({ type: "file", id: target.id });
-    else setSelection({ type: "folder", path: target.path });
+    if (target.type === "file") {
+      if (selection?.type === "files" && selection.ids.includes(target.id)) {
+        setSelection({ ...selection, primaryId: target.id });
+      } else {
+        selectSingleFile(target.id);
+      }
+    } else if (target.type === "folder") {
+      setSelection({ type: "folder", path: target.path });
+      setSelectionAnchorId(null);
+    } else {
+      clearSelection();
+    }
     setMenu({ x: event.clientX, y: event.clientY, target });
   }
 
   async function saveTags(names: string[]) {
-    if (!menu) return;
+    if (!menu || menu.target.type === "directory") return;
     setError(null);
     const res =
       menu.target.type === "file"
@@ -466,7 +548,7 @@ export function FileBrowser({
       Array.from(files).map((file) => ({ file, folderPath })),
     );
     notifyUploadResult(result);
-    if (result.last) setSelection({ type: "file", id: result.last.id });
+    if (result.last) selectSingleFile(result.last.id);
     await onChanged();
     return result.last;
   }
@@ -523,32 +605,67 @@ export function FileBrowser({
     const result = await runUploadBatch(uploads);
     notifyUploadResult(result);
     last = result.last;
-    if (last) setSelection({ type: "file", id: last.id });
+    if (last) selectSingleFile(last.id);
     else if (neededFolders.length > 0) {
       setSelection({
         type: "folder",
         path: neededFolders[neededFolders.length - 1],
       });
+      setSelectionAnchorId(null);
     }
     await onChanged();
   }
 
-  async function moveAsset(assetId: string, folderPath: string) {
-    const asset = visibleAssets.find((item) => item.id === assetId);
-    if (!asset || asset.folderPath === folderPath) return;
-    setError(null);
-    const res = await fetch(`/api/assets/${assetId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folderPath }),
+  async function moveAssets(assetIds: string[], folderPath: string) {
+    const toMove = assetIds.filter((assetId) => {
+      const asset = visibleAssets.find((item) => item.id === assetId);
+      return Boolean(asset && asset.folderPath !== folderPath);
     });
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error || "Could not move file");
-      return;
+    if (toMove.length === 0) return;
+    setError(null);
+    for (const assetId of toMove) {
+      const res = await fetch(`/api/assets/${assetId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderPath }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || "Could not move file");
+        await onChanged();
+        return;
+      }
     }
-    setSelection({ type: "file", id: assetId });
+    setSelection({
+      type: "files",
+      ids: toMove,
+      primaryId: toMove[toMove.length - 1]!,
+    });
+    setSelectionAnchorId(toMove[toMove.length - 1]!);
     await onChanged();
+  }
+
+  function parseDraggedAssetIds(raw: string): string[] {
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (
+        Array.isArray(parsed) &&
+        parsed.every((item) => typeof item === "string")
+      ) {
+        return parsed.filter((id) =>
+          visibleAssets.some((asset) => asset.id === id),
+        );
+      }
+    } catch {
+      // Fall through to plain / comma-separated ids.
+    }
+    return raw
+      .split(",")
+      .map((part) => part.trim())
+      .filter(
+        (id) => id.length > 0 && visibleAssets.some((asset) => asset.id === id),
+      );
   }
 
   async function createFile() {
@@ -588,6 +705,7 @@ export function FileBrowser({
     setCreatingFolder(false);
     setNewName("");
     setSelection({ type: "folder", path: data.folder.path });
+    setSelectionAnchorId(null);
     await onChanged();
   }
 
@@ -619,7 +737,7 @@ export function FileBrowser({
     const assetId = renaming.asset.id;
     setRenaming(null);
     setNewName("");
-    setSelection({ type: "file", id: assetId });
+    selectSingleFile(assetId);
     await onChanged();
   }
 
@@ -685,8 +803,23 @@ export function FileBrowser({
         setError(data.error || "Delete failed");
         return;
       }
-      if (selection?.type === "file" && selection.id === pendingDelete.asset.id) {
-        setSelection(null);
+      if (
+        selection?.type === "files" &&
+        selection.ids.includes(pendingDelete.asset.id)
+      ) {
+        const nextIds = selection.ids.filter(
+          (id) => id !== pendingDelete.asset.id,
+        );
+        if (nextIds.length === 0) clearSelection();
+        else {
+          setSelection({
+            type: "files",
+            ids: nextIds,
+            primaryId: nextIds.includes(selection.primaryId)
+              ? selection.primaryId
+              : nextIds[0]!,
+          });
+        }
       }
     } else {
       const params = new URLSearchParams({ path: pendingDelete.path });
@@ -701,7 +834,7 @@ export function FileBrowser({
         return;
       }
       if (selection?.type === "folder" && selection.path === pendingDelete.path) {
-        setSelection(null);
+        clearSelection();
       }
     }
     setPendingDelete(null);
@@ -712,11 +845,12 @@ export function FileBrowser({
     event.preventDefault();
     event.stopPropagation();
     setDropTarget(null);
-    const assetId =
+    const assetIds = parseDraggedAssetIds(
       event.dataTransfer.getData(ASSET_DRAG) ||
-      event.dataTransfer.getData("text/plain");
-    if (assetId && visibleAssets.some((asset) => asset.id === assetId)) {
-      void moveAsset(assetId, folderPath);
+        event.dataTransfer.getData("text/plain"),
+    );
+    if (assetIds.length > 0) {
+      void moveAssets(assetIds, folderPath);
       return;
     }
     if (
@@ -740,7 +874,7 @@ export function FileBrowser({
   }
 
   const crumbs = [
-    { label: headerLabel, onClick: () => { setPath(""); setSelection(null); } },
+    { label: headerLabel, onClick: () => { setPath(""); clearSelection(); } },
     ...((path ? path.split("/") : []).map((part, index, parts) => {
       const next = parts.slice(0, index + 1).join("/");
       return { label: part, onClick: () => openFolder(next) };
@@ -815,8 +949,8 @@ export function FileBrowser({
           type="button"
           disabled={!taggable}
           onClick={(event) => {
-            if (selection?.type === "file") {
-              openItemMenu(event, { type: "file", id: selection.id });
+            if (selection?.type === "files" && selection.ids.length === 1) {
+              openItemMenu(event, { type: "file", id: selection.primaryId });
             } else if (selection?.type === "folder") {
               openItemMenu(event, { type: "folder", path: selection.path });
             }
@@ -829,8 +963,10 @@ export function FileBrowser({
           type="button"
           disabled={!deleteEnabled}
           onClick={() => {
-            if (selection?.type === "file") {
-              const asset = visibleAssets.find((item) => item.id === selection.id);
+            if (selection?.type === "files") {
+              const asset = visibleAssets.find(
+                (item) => item.id === selection.primaryId,
+              );
               if (asset) setPendingDelete({ type: "file", asset });
             } else if (selection?.type === "folder") {
               setPendingDelete({ type: "folder", path: selection.path });
@@ -900,8 +1036,13 @@ export function FileBrowser({
               </span>
             ))}
           </nav>
-          <div className="min-h-0 flex-1 overflow-auto">
-            <ul>
+          <div
+            className="min-h-0 flex-1 overflow-auto"
+            onContextMenu={(event) =>
+              openItemMenu(event, { type: "directory" })
+            }
+          >
+            <ul className="min-h-full select-none">
               <li>
                 <button
                   type="button"
@@ -951,9 +1092,10 @@ export function FileBrowser({
                     >
                       <button
                         type="button"
-                        onClick={() =>
-                          setSelection({ type: "folder", path: folder.path })
-                        }
+                        onClick={() => {
+                          setSelection({ type: "folder", path: folder.path });
+                          setSelectionAnchorId(null);
+                        }}
                         onDoubleClick={() => openFolder(folder.path)}
                         className="flex min-w-0 flex-1 items-center gap-2 text-left"
                       >
@@ -979,8 +1121,8 @@ export function FileBrowser({
                 );
               })}
               {listedFiles.map((asset) => {
-                const selected =
-                  selection?.type === "file" && selection.id === asset.id;
+                const selected = selectedFileIds.has(asset.id);
+                const dragging = draggingIds.includes(asset.id);
                 return (
                   <li key={asset.id}>
                     <div
@@ -988,25 +1130,38 @@ export function FileBrowser({
                       onContextMenu={(event) =>
                         openItemMenu(event, { type: "file", id: asset.id })
                       }
+                      onMouseDown={(event) => {
+                        // Avoid shift-click text selection while ranging.
+                        if (event.shiftKey) event.preventDefault();
+                      }}
                       onDragStart={(event) => {
-                        event.dataTransfer.setData(ASSET_DRAG, asset.id);
-                        event.dataTransfer.setData("text/plain", asset.id);
+                        const ids =
+                          selectedFileIds.has(asset.id) &&
+                          selection?.type === "files"
+                            ? selection.ids
+                            : [asset.id];
+                        if (!selectedFileIds.has(asset.id)) {
+                          selectSingleFile(asset.id);
+                        }
+                        event.dataTransfer.setData(
+                          ASSET_DRAG,
+                          JSON.stringify(ids),
+                        );
+                        event.dataTransfer.setData("text/plain", ids.join(","));
                         event.dataTransfer.effectAllowed = "move";
-                        setDraggingId(asset.id);
+                        setDraggingIds(ids);
                       }}
                       onDragEnd={() => {
-                        setDraggingId(null);
+                        setDraggingIds([]);
                         setDropTarget(null);
                       }}
                       className={`flex items-center gap-2 px-3 py-2 ${
                         selected ? "bg-overlay" : "hover:bg-overlay/60"
-                      } ${draggingId === asset.id ? "opacity-50" : ""}`}
+                      } ${dragging ? "opacity-50" : ""}`}
                     >
                       <button
                         type="button"
-                        onClick={() =>
-                          setSelection({ type: "file", id: asset.id })
-                        }
+                        onClick={(event) => selectFileClick(asset.id, event)}
                         className="flex min-w-0 flex-1 items-center gap-2 text-left"
                       >
                         <FileIcon />
@@ -1039,6 +1194,12 @@ export function FileBrowser({
         <div className="flex min-h-[280px] min-w-0 flex-col overflow-hidden lg:min-h-0">
           {selectedFile ? (
             <div className="flex h-full min-h-0 flex-col overflow-hidden">
+              {selection?.type === "files" && selection.ids.length > 1 ? (
+                <p className="shrink-0 border-b border-line px-4 py-2 text-[12px] text-muted">
+                  {selection.ids.length} files selected — drag to a folder to
+                  move all
+                </p>
+              ) : null}
               {selectedFile.tags.length > 0 ? (
                 <div className="shrink-0 border-b border-line px-4 py-2">
                   <TagChips
@@ -1135,10 +1296,21 @@ export function FileBrowser({
         <TagContextMenu
           x={menu.x}
           y={menu.y}
-          assigned={menuAssigned}
-          catalog={catalog}
-          onSetNames={saveTags}
+          assigned={menu.target.type === "directory" ? undefined : menuAssigned}
+          catalog={menu.target.type === "directory" ? undefined : catalog}
+          onSetNames={
+            menu.target.type === "directory" ? undefined : saveTags
+          }
           onClose={() => setMenu(null)}
+          onNewFile={
+            menu.target.type === "directory"
+              ? () => {
+                  setError(null);
+                  setNewName("");
+                  setCreatingFile(true);
+                }
+              : undefined
+          }
           onDownload={
             menu.target.type === "file"
               ? () => {
@@ -1149,20 +1321,27 @@ export function FileBrowser({
                 }
               : undefined
           }
-          onRename={() => {
-            const target = menu.target;
-            setError(null);
-            if (target.type === "file") {
-              const asset = visibleAssets.find((item) => item.id === target.id);
-              if (!asset) return;
-              setNewName(asset.filename);
-              setRenaming({ type: "file", asset });
-              return;
-            }
-            const name = target.path.split("/").pop() ?? target.path;
-            setNewName(name);
-            setRenaming({ type: "folder", path: target.path });
-          }}
+          onRename={
+            menu.target.type === "directory"
+              ? undefined
+              : () => {
+                  const target = menu.target;
+                  setError(null);
+                  if (target.type === "file") {
+                    const asset = visibleAssets.find(
+                      (item) => item.id === target.id,
+                    );
+                    if (!asset) return;
+                    setNewName(asset.filename);
+                    setRenaming({ type: "file", asset });
+                    return;
+                  }
+                  if (target.type !== "folder") return;
+                  const name = target.path.split("/").pop() ?? target.path;
+                  setNewName(name);
+                  setRenaming({ type: "folder", path: target.path });
+                }
+          }
           onNewFolder={() => {
             const target = menu.target;
             if (target.type === "folder") {
@@ -1173,15 +1352,23 @@ export function FileBrowser({
             setNewName("");
             setCreatingFolder(true);
           }}
-          onDelete={() => {
-            const target = menu.target;
-            if (target.type === "file") {
-              const asset = visibleAssets.find((item) => item.id === target.id);
-              if (asset) setPendingDelete({ type: "file", asset });
-              return;
-            }
-            setPendingDelete({ type: "folder", path: target.path });
-          }}
+          onDelete={
+            menu.target.type === "directory"
+              ? undefined
+              : () => {
+                  const target = menu.target;
+                  if (target.type === "file") {
+                    const asset = visibleAssets.find(
+                      (item) => item.id === target.id,
+                    );
+                    if (asset) setPendingDelete({ type: "file", asset });
+                    return;
+                  }
+                  if (target.type === "folder") {
+                    setPendingDelete({ type: "folder", path: target.path });
+                  }
+                }
+          }
         />
       ) : null}
 

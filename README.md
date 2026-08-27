@@ -74,7 +74,7 @@ Postgres data lives in the `pgdata` Docker volume. Vault files are bind-mounted 
 
 ## Projects
 
-- Top-level IDs are assigned as `PROJ-001`, `PROJ-002`, … Nested projects use dotted IDs (`001.1`, `001.1.1`, …). IDs can be edited.
+- Top-level IDs are assigned as `PROJ-001`, `PROJ-002`, … Nested projects keep the parent prefix with dotted suffixes (`PROJ-001.1`, `PROJ-001.1.1`, …). IDs can be edited.
 - Statuses: Planned, Active, On hold, Done, Archived. Archiving writes a backup immediately and excludes the project from later scheduled backups. Retention can keep a fixed number of backups per project, or drop archives older than a week, month, year, or decade. At least one backup per project is always kept.
 - A project can nest under another. Moving a project under itself or a descendant is blocked.
 - Deleting a project that has children or files requires **Delete with nested + files**.
