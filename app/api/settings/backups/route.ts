@@ -1,4 +1,4 @@
-import { json, isResponse, requireUser } from "@/lib/api";
+import { json, isResponse, requireUser } from "@/lib/shared/api";
 import {
   backupRoot,
   backupStats,
@@ -10,7 +10,7 @@ import {
   listProjectBackups,
   runBackupPass,
   updateBackupSettings,
-} from "@/lib/backup";
+} from "@/lib/backups/backup";
 
 export const runtime = "nodejs";
 

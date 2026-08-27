@@ -1,22 +1,22 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
-import { json, isResponse, requireUser } from "@/lib/api";
-import { formatBytes } from "@/lib/format";
-import { isPreviewableImage } from "@/lib/kinds";
+import { json, isResponse, requireUser } from "@/lib/shared/api";
+import { formatBytes } from "@/lib/shared/format";
+import { isPreviewableImage } from "@/lib/vault/kinds";
 import {
   clearVaultLogo,
   getVaultLogoRecord,
   logoFilename,
   setVaultLogo,
-} from "@/lib/project-settings";
-import { resolveMaxUploadBytes } from "@/lib/upload-settings";
+} from "@/lib/settings/project-settings";
+import { resolveMaxUploadBytes } from "@/lib/settings/upload-settings";
 import {
   absoluteFromStorage,
   relativeVaultSettingsPath,
   removeVaultFile,
   writeVaultSettingsFile,
-} from "@/lib/vault";
+} from "@/lib/vault/vault";
 
 export const runtime = "nodejs";
 

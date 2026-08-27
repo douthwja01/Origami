@@ -1,6 +1,6 @@
-import { json, isResponse, requireUser } from "@/lib/api";
-import { getStoredTheme, updateStoredTheme } from "@/lib/theme-settings";
-import { isThemeId } from "@/lib/themes";
+import { json, isResponse, requireUser } from "@/lib/shared/api";
+import { getStoredTheme, updateStoredTheme } from "@/lib/settings/theme-settings";
+import { isThemeId } from "@/lib/settings/themes";
 
 export const runtime = "nodejs";
 

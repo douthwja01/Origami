@@ -1,6 +1,6 @@
-import { AppShell } from "@/components/AppShell";
-import { getProjectDisplaySettings } from "@/lib/project-settings";
-import { DEFAULT_PROJECT_DISPLAY_SETTINGS } from "@/lib/project-settings-types";
+import { AppShell } from "@/components/shell/AppShell";
+import { getProjectDisplaySettings } from "@/lib/settings/project-settings";
+import { DEFAULT_PROJECT_DISPLAY_SETTINGS } from "@/lib/settings/project-settings-types";
 
 export const dynamic = "force-dynamic";
 

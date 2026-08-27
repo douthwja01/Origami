@@ -1,10 +1,10 @@
-import { json, isResponse, requireUser } from "@/lib/api";
+import { json, isResponse, requireUser } from "@/lib/shared/api";
 import {
   getProjectDisplaySettings,
   parseVaultName,
   updateProjectDisplaySettings,
-} from "@/lib/project-settings";
-import { VAULT_NAME_MAX } from "@/lib/project-settings-types";
+} from "@/lib/settings/project-settings";
+import { VAULT_NAME_MAX } from "@/lib/settings/project-settings-types";
 
 export const runtime = "nodejs";
 

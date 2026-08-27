@@ -1,9 +1,9 @@
-import { json, isResponse, requireUser } from "@/lib/api";
+import { json, isResponse, requireUser } from "@/lib/shared/api";
 import {
   clampMediaBackgroundOpacity,
   isMediaBackgroundMode,
   isMediaBackgroundOpacity,
-} from "@/lib/project-settings";
+} from "@/lib/settings/project-settings";
 import {
   ancestorsOf,
   childrenOf,
@@ -14,9 +14,9 @@ import {
   listProjects,
   parseOptionalHttpUrl,
   updateProject,
-} from "@/lib/projects";
-import { listProjectTags } from "@/lib/tags";
-import { isStatus } from "@/lib/types";
+} from "@/lib/projects/projects";
+import { listProjectTags } from "@/lib/tags/tags";
+import { isStatus } from "@/lib/shared/types";
 
 type Ctx = { params: Promise<{ id: string }> };
 

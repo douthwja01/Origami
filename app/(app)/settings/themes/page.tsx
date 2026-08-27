@@ -1,6 +1,7 @@
-import { ThemePicker } from "@/components/ThemePicker";
-import { SETTINGS_NAV } from "@/lib/settings";
-import { getStoredTheme } from "@/lib/theme-settings";
+import { ThemePicker } from "@/components/settings/ThemePicker";
+import { SettingsPageShell } from "@/components/settings/SettingsPageShell";
+import { SETTINGS_NAV } from "@/lib/settings/nav";
+import { getStoredTheme } from "@/lib/settings/theme-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -9,16 +10,19 @@ export default async function ThemesPage() {
   const theme = await getStoredTheme();
 
   return (
-    <main className="px-5 py-6 lg:px-8">
-      <h1 className="text-[22px] font-medium tracking-tight">Themes</h1>
-      <p className="mt-1 max-w-xl text-[13px] text-muted">
-        {item?.description}. Colors, wallpaper, glow, and contrast change;
-        spacing and structure stay put.
-      </p>
-
+    <SettingsPageShell
+      href="/settings/themes"
+      title="Themes"
+      description={
+        <>
+          {item?.description}. Colors, wallpaper, glow, and contrast change;
+          spacing and structure stay put.
+        </>
+      }
+    >
       <section className="mt-6 max-w-4xl">
         <ThemePicker initialTheme={theme} />
       </section>
-    </main>
+    </SettingsPageShell>
   );
 }

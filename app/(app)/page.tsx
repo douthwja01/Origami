@@ -1,4 +1,4 @@
-import { StatusBoard } from "@/components/StatusBoard";
+import { StatusBoard } from "@/components/projects/StatusBoard";
 
 export default function HomePage() {
   return (

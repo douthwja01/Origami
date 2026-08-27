@@ -1,10 +1,10 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
-import { json, isResponse, requireUser } from "@/lib/api";
-import { deleteAssetRow, getAsset, updateAsset } from "@/lib/projects";
-import { isKind } from "@/lib/types";
-import { absoluteFromStorage, removeVaultFile } from "@/lib/vault";
+import { json, isResponse, requireUser } from "@/lib/shared/api";
+import { deleteAssetRow, getAsset, updateAsset } from "@/lib/projects/projects";
+import { isKind } from "@/lib/shared/types";
+import { absoluteFromStorage, removeVaultFile } from "@/lib/vault/vault";
 
 type Ctx = { params: Promise<{ id: string }> };
 

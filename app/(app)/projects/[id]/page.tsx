@@ -1,7 +1,7 @@
 "use client";
 
 import { use } from "react";
-import { ProjectWorkspace } from "@/components/ProjectWorkspace";
+import { ProjectWorkspace } from "@/components/projects/ProjectWorkspace";
 
 export default function ProjectPage({
   params,

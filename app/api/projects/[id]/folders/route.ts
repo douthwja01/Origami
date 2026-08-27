@@ -1,12 +1,12 @@
-import { json, isResponse, requireUser } from "@/lib/api";
-import { normalizeFolderPath } from "@/lib/folder-path";
+import { json, isResponse, requireUser } from "@/lib/shared/api";
+import { normalizeFolderPath } from "@/lib/vault/folder-path";
 import {
   createFolder,
   deleteFolder,
   getProjectRow,
   listFolders,
   renameFolder,
-} from "@/lib/projects";
+} from "@/lib/projects/projects";
 
 type Ctx = { params: Promise<{ id: string }> };
 

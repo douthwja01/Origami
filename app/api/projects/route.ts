@@ -1,6 +1,6 @@
-import { json, isResponse, requireUser } from "@/lib/api";
-import { createProject, listProjects, parseOptionalHttpUrl } from "@/lib/projects";
-import { isStatus } from "@/lib/types";
+import { json, isResponse, requireUser } from "@/lib/shared/api";
+import { createProject, listProjects, parseOptionalHttpUrl } from "@/lib/projects/projects";
+import { isStatus } from "@/lib/shared/types";
 
 export async function GET() {
   const user = await requireUser();

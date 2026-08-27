@@ -1,6 +1,6 @@
-import { json, isResponse, requireUser } from "@/lib/api";
-import { getAsset } from "@/lib/projects";
-import { parseTagNames, setAssetTags } from "@/lib/tags";
+import { json, isResponse, requireUser } from "@/lib/shared/api";
+import { getAsset } from "@/lib/projects/projects";
+import { parseTagNames, setAssetTags } from "@/lib/tags/tags";
 
 type Ctx = { params: Promise<{ id: string }> };
 

@@ -1,5 +1,5 @@
 import type { NextConfig } from "next";
-import { maxUploadBodyLimitFromEnv } from "./lib/upload-limit-env";
+import { maxUploadBodyLimitFromEnv } from "./lib/settings/upload-limit-env";
 
 const uploadBodyLimit = maxUploadBodyLimitFromEnv();
 

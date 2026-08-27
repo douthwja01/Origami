@@ -1,6 +1,6 @@
-import { json } from "@/lib/api";
-import { verifyCredentials } from "@/lib/auth";
-import { getSession } from "@/lib/session";
+import { json } from "@/lib/shared/api";
+import { verifyCredentials } from "@/lib/auth/auth";
+import { getSession } from "@/lib/auth/session";
 
 export async function POST(request: Request) {
   let body: { username?: string; password?: string };

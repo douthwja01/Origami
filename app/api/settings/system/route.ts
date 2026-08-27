@@ -1,10 +1,10 @@
-import { json, isResponse, requireUser } from "@/lib/api";
+import { json, isResponse, requireUser } from "@/lib/shared/api";
 import {
   getSystemUploadSettings,
   parseMaxUploadMb,
   updateSystemUploadSettings,
-} from "@/lib/upload-settings";
-import { maxUploadMbFromEnv } from "@/lib/upload-limit-env";
+} from "@/lib/settings/upload-settings";
+import { maxUploadMbFromEnv } from "@/lib/settings/upload-limit-env";
 
 export const runtime = "nodejs";
 

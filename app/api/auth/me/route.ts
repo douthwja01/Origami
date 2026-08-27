@@ -1,4 +1,4 @@
-import { json, isResponse, requireUser } from "@/lib/api";
+import { json, isResponse, requireUser } from "@/lib/shared/api";
 
 export async function GET() {
   const user = await requireUser();

@@ -1,17 +1,17 @@
 import { randomUUID } from "node:crypto";
-import { json, isResponse, requireUser } from "@/lib/api";
-import { formatBytes } from "@/lib/format";
-import { isPreviewableImage } from "@/lib/kinds";
-import { PROJECT_BACKGROUND_FOLDER } from "@/lib/project-background";
+import { json, isResponse, requireUser } from "@/lib/shared/api";
+import { formatBytes } from "@/lib/shared/format";
+import { isPreviewableImage } from "@/lib/vault/kinds";
+import { PROJECT_BACKGROUND_FOLDER } from "@/lib/projects/project-background";
 import {
   clearBackgroundFolderAssets,
   ensureProjectFolder,
   getProjectRow,
   insertAsset,
   updateProject,
-} from "@/lib/projects";
-import { resolveMaxUploadBytes } from "@/lib/upload-settings";
-import { removeVaultFile, writeVaultFile } from "@/lib/vault";
+} from "@/lib/projects/projects";
+import { resolveMaxUploadBytes } from "@/lib/settings/upload-settings";
+import { removeVaultFile, writeVaultFile } from "@/lib/vault/vault";
 
 type Ctx = { params: Promise<{ id: string }> };
 

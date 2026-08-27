@@ -1,7 +1,8 @@
-import { backupRoot, backupStats, getBackupSettings, listProjectBackups } from "@/lib/backup";
-import { formatBytes } from "@/lib/format";
-import { SETTINGS_NAV } from "@/lib/settings";
-import { BackupSettings } from "@/components/BackupSettings";
+import { backupRoot, backupStats, getBackupSettings, listProjectBackups } from "@/lib/backups/backup";
+import { formatBytes } from "@/lib/shared/format";
+import { SETTINGS_NAV } from "@/lib/settings/nav";
+import { BackupSettings } from "@/components/settings/BackupSettings";
+import { SettingsPageShell } from "@/components/settings/SettingsPageShell";
 
 export const dynamic = "force-dynamic";
 
@@ -14,14 +15,17 @@ export default async function BackupsPage() {
   ]);
 
   return (
-    <main className="px-5 py-6 lg:px-8">
-      <h1 className="text-[22px] font-medium tracking-tight">Backups</h1>
-      <p className="mt-1 max-w-xl text-[13px] text-muted">
-        {item?.description}. A full archive includes an{" "}
-        <span className="font-mono text-[12px]">origami-backup.json</span>{" "}
-        snapshot of every project and file record, plus the vault folder.
-      </p>
-
+    <SettingsPageShell
+      href="/settings/backups"
+      title="Backups"
+      description={
+        <>
+          {item?.description}. A full archive includes an{" "}
+          <span className="font-mono text-[12px]">origami-backup.json</span>{" "}
+          snapshot of every project and file record, plus the vault folder.
+        </>
+      }
+    >
       <section className="mt-6 flex max-w-2xl flex-col rounded-xl border border-line bg-raised p-4">
         <h2 className="text-[13px] font-medium">Download everything</h2>
         <dl className="mt-3 grid grid-cols-3 gap-3 text-[13px]">
@@ -56,6 +60,6 @@ export default async function BackupsPage() {
         backupDir={backupRoot()}
         runs={runs}
       />
-    </main>
+    </SettingsPageShell>
   );
 }

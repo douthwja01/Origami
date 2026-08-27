@@ -1,6 +1,6 @@
 import { Readable } from "node:stream";
-import { json, isResponse, requireUser } from "@/lib/api";
-import { createBackupStream } from "@/lib/backup";
+import { json, isResponse, requireUser } from "@/lib/shared/api";
+import { createBackupStream } from "@/lib/backups/backup";
 
 export const runtime = "nodejs";
 
