@@ -120,6 +120,20 @@
       "when": 1787753000000,
       "tag": "0016_fixed_project_background",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1787754000000,
+      "tag": "0017_backup_asset_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1787754100000,
+      "tag": "0018_backup_kind_retag",
+      "breakpoints": true
     }
   ]
 }

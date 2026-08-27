@@ -7,7 +7,7 @@ export type ProjectStatus =
   | "done"
   | "archived";
 
-export type AssetKind = "media" | "code" | "document" | "cad";
+export type AssetKind = "media" | "code" | "document" | "cad" | "backup";
 
 export const STATUSES: ProjectStatus[] = [
   "planned",
@@ -24,7 +24,13 @@ export const BOARD_STATUSES: ProjectStatus[] = [
   "done",
 ];
 
-export const ASSET_KINDS: AssetKind[] = ["media", "code", "document", "cad"];
+export const ASSET_KINDS: AssetKind[] = [
+  "media",
+  "code",
+  "document",
+  "cad",
+  "backup",
+];
 
 export type ProjectDTO = {
   id: string;

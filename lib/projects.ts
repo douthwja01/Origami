@@ -36,7 +36,7 @@ import {
 } from "@/lib/vault";
 
 function emptyKinds(): Record<AssetKind, number> {
-  return { media: 0, code: 0, document: 0, cad: 0 };
+  return { media: 0, code: 0, document: 0, cad: 0, backup: 0 };
 }
 
 export function toProjectDTO(

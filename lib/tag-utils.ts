@@ -7,6 +7,14 @@ export function tagKey(name: string): string {
   return name.trim().replace(/\s+/g, " ").toLocaleLowerCase();
 }
 
+/** Normalize user/input names onto canonical tag keys (kind tags included). */
+export function canonicalTagKey(name: string): string {
+  const key = tagKey(name);
+  // kindTagName("document") is "Documents" → tagKey would be "documents"
+  if (key === "documents") return "document";
+  return key;
+}
+
 export function parseTagName(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const name = value.trim().replace(/\s+/g, " ");
@@ -31,7 +39,7 @@ export function parseTagNames(value: unknown): string[] {
         { status: 400 },
       );
     }
-    const key = tagKey(name);
+    const key = canonicalTagKey(name);
     if (seen.has(key)) continue;
     seen.add(key);
     names.push(name);
@@ -63,10 +71,19 @@ export function itemMatchesTagQuery(
 }
 
 export function isKindTagKey(key: string): boolean {
-  return key === "media" || key === "code" || key === "document" || key === "cad";
+  const normalized = canonicalTagKey(key);
+  return (
+    normalized === "media" ||
+    normalized === "code" ||
+    normalized === "document" ||
+    normalized === "cad" ||
+    normalized === "backup"
+  );
 }
 
-export function kindTagName(kind: "media" | "code" | "document" | "cad"): string {
+export function kindTagName(
+  kind: "media" | "code" | "document" | "cad" | "backup",
+): string {
   switch (kind) {
     case "media":
       return "Media";
@@ -76,6 +93,8 @@ export function kindTagName(kind: "media" | "code" | "document" | "cad"): string
       return "Documents";
     case "cad":
       return "CAD";
+    case "backup":
+      return "Backup";
   }
 }
 

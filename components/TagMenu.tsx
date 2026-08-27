@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { isKindTagKey, parseTagName, tagKey } from "@/lib/tag-utils";
+import { isKindTagKey, parseTagName, canonicalTagKey } from "@/lib/tag-utils";
 import type { TagDTO } from "@/lib/types";
 
 export function TagChips({
@@ -130,9 +130,9 @@ export function TagContextMenu({
   const createName = parseTagName(query);
   const canCreate =
     Boolean(createName) &&
-    !isKindTagKey(tagKey(createName!)) &&
-    !catalog.some((tag) => tag.key === tagKey(createName!)) &&
-    !assigned.some((tag) => tag.key === tagKey(createName!));
+    !isKindTagKey(canonicalTagKey(createName!)) &&
+    !catalog.some((tag) => tag.key === canonicalTagKey(createName!)) &&
+    !assigned.some((tag) => tag.key === canonicalTagKey(createName!));
 
   async function setNames(names: string[]) {
     setBusy(true);

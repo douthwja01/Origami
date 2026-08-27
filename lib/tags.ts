@@ -2,12 +2,13 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { assetTags, assets, folderTags, projectFolders, tags } from "@/lib/db/schema";
 import { normalizeFolderPath } from "@/lib/folder-path";
-import { kindTagName, isKindTagKey, tagKey } from "@/lib/tag-utils";
+import { kindTagName, isKindTagKey, canonicalTagKey, tagKey } from "@/lib/tag-utils";
 import { ASSET_KINDS, type AssetKind, type TagDTO } from "@/lib/types";
 
 export {
   TAG_NAME_MAX,
   TAGS_PER_ITEM_MAX,
+  canonicalTagKey,
   firstTagSortKey,
   isKindTagKey,
   itemMatchesTagQuery,
@@ -127,9 +128,12 @@ async function ensureTags(
   names: string[],
 ): Promise<TagDTO[]> {
   const result: TagDTO[] = [];
+  const seen = new Set<string>();
   const db = getDb();
   for (const name of names) {
-    const key = tagKey(name);
+    const key = canonicalTagKey(name);
+    if (seen.has(key)) continue;
+    seen.add(key);
     const system = isKindTagKey(key);
     const storedName = system ? kindTagName(key as AssetKind) : name;
     const [existing] = await db
@@ -169,16 +173,27 @@ export async function assignRequiredKindTag(
   projectId: string,
   kind: AssetKind,
 ): Promise<TagDTO[]> {
+  await ensureKindTags(projectId);
   const required = await ensureTags(projectId, [kindTagName(kind)]);
   const db = getDb();
-  const existing = await db
-    .select({ tagId: assetTags.tagId })
+  // Drop any other kind tags so renames / bad data cannot leave duplicates.
+  const kindKeys = ASSET_KINDS as readonly string[];
+  const attached = await db
+    .select({ tagId: assetTags.tagId, key: tags.key })
     .from(assetTags)
-    .where(
-      and(eq(assetTags.assetId, assetId), eq(assetTags.tagId, required[0].id)),
-    )
-    .limit(1);
-  if (!existing[0]) {
+    .innerJoin(tags, eq(assetTags.tagId, tags.id))
+    .where(eq(assetTags.assetId, assetId));
+  for (const row of attached) {
+    if (kindKeys.includes(row.key) && row.key !== kind) {
+      await db
+        .delete(assetTags)
+        .where(
+          and(eq(assetTags.assetId, assetId), eq(assetTags.tagId, row.tagId)),
+        );
+    }
+  }
+  const existing = attached.find((row) => row.tagId === required[0].id);
+  if (!existing) {
     await db.insert(assetTags).values({ assetId, tagId: required[0].id });
   }
   const map = await tagsForAssets([assetId]);
@@ -200,7 +215,7 @@ export async function setAssetTags(
     throw Object.assign(new Error("Asset not found"), { status: 404 });
   }
   const requiredName = kindTagName(asset.kind);
-  const extra = names.filter((name) => !isKindTagKey(tagKey(name)));
+  const extra = names.filter((name) => !isKindTagKey(canonicalTagKey(name)));
   const resolved = await ensureTags(projectId, [requiredName, ...extra]);
   await db.delete(assetTags).where(eq(assetTags.assetId, assetId));
   if (resolved.length > 0) {
@@ -244,7 +259,7 @@ export async function setFolderTags(
 ): Promise<TagDTO[]> {
   const folderId = await ensureFolderId(projectId, path);
   const db = getDb();
-  const extra = names.filter((name) => !isKindTagKey(tagKey(name)));
+  const extra = names.filter((name) => !isKindTagKey(canonicalTagKey(name)));
   const resolved = await ensureTags(projectId, extra);
   await db.delete(folderTags).where(eq(folderTags.folderId, folderId));
   if (resolved.length > 0) {

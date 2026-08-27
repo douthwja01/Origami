@@ -130,12 +130,6 @@ const CODE_EXT = new Set([
   "gradle",
   "cmake",
   "mk",
-  "zip",
-  "tar",
-  "gz",
-  "tgz",
-  "7z",
-  "rar",
   "gitignore",
   "dockerignore",
   "editorconfig",
@@ -160,6 +154,8 @@ const CODE_EXT = new Set([
   "dart",
   "proto",
 ]);
+
+const BACKUP_EXT = new Set(["zip", "rar", "7z", "tar", "gz", "tgz"]);
 
 const CODE_NAMES = new Set([
   "makefile",
@@ -221,6 +217,11 @@ const MIME_BY_EXT: Record<string, string> = {
   stp: "application/step",
   dxf: "image/vnd.dxf",
   zip: "application/zip",
+  rar: "application/vnd.rar",
+  "7z": "application/x-7z-compressed",
+  tar: "application/x-tar",
+  gz: "application/gzip",
+  tgz: "application/gzip",
 };
 
 export function mimeFromFilename(filename: string): string {
@@ -234,6 +235,7 @@ export function inferKind(filename: string): AssetKind {
   const ext = extensionOf(filename);
   if (MEDIA_EXT.has(ext)) return "media";
   if (CAD_EXT.has(ext)) return "cad";
+  if (BACKUP_EXT.has(ext)) return "backup";
   if (CODE_EXT.has(ext)) return "code";
   if (DOC_EXT.has(ext)) return "document";
   return "document";
@@ -281,7 +283,7 @@ export function isStlOrObj(filename: string): boolean {
 }
 
 export function isArchive(filename: string): boolean {
-  return ["zip", "tar", "gz", "tgz", "7z", "rar"].includes(extensionOf(filename));
+  return BACKUP_EXT.has(extensionOf(filename));
 }
 
 export function languageFromFilename(filename: string): string {

@@ -28,6 +28,7 @@ export const assetKind = pgEnum("asset_kind", [
   "code",
   "document",
   "cad",
+  "backup",
 ]);
 
 export const mediaBackgroundMode = pgEnum("media_background_mode", [

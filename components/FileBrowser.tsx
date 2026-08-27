@@ -1150,7 +1150,7 @@ export function FileBrowser({
           hint={
             filterKind
               ? `Creates an empty file. Type is set from the name (${kindLabel(filterKind)} for matching extensions).`
-              : "Creates an empty file. Media, Code, Documents, or CAD is assigned from the file extension."
+              : "Creates an empty file. Media, Code, Documents, CAD, or Backup is assigned from the file extension."
           }
           value={newName}
           placeholder={placeholderFor(filterKind)}
@@ -1411,6 +1411,8 @@ function placeholderFor(kind?: AssetKind): string {
       return "main.ts";
     case "cad":
       return "part.stl";
+    case "backup":
+      return "archive.zip";
     default:
       return "notes.md";
   }

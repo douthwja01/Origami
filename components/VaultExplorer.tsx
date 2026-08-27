@@ -54,12 +54,14 @@ export function VaultExplorer({
       code: 0,
       document: 0,
       cad: 0,
+      backup: 0,
     };
     const sizes: Record<AssetKind, number> = {
       media: 0,
       code: 0,
       document: 0,
       cad: 0,
+      backup: 0,
     };
     let totalBytes = 0;
     for (const asset of assets) {
@@ -93,7 +95,7 @@ export function VaultExplorer({
     <div className="flex h-full min-h-0 flex-col gap-4">
       <nav className="flex h-10 shrink-0 items-end gap-1 overflow-x-auto overflow-y-hidden shadow-[inset_0_-1px_0_0_var(--color-line)]">
         <Tab
-          label="Overview"
+          label="Files"
           count={assets.length}
           active={tab === "overview"}
           onClick={() => openTab("overview")}
@@ -257,7 +259,7 @@ function RecentFilesCard({
       </div>
       {recent.length === 0 ? (
         <p className="border-t border-line px-4 py-3 text-[13px] text-muted">
-          Nothing in the vault yet. Open Overview to upload.
+          Nothing in the vault yet. Open Files to upload.
         </p>
       ) : (
         <ul className="divide-y divide-line border-t border-line">

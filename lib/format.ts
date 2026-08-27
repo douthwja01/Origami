@@ -60,6 +60,8 @@ export function kindLabel(kind: string): string {
       return "Documents";
     case "cad":
       return "CAD";
+    case "backup":
+      return "Backup";
     default:
       return kind;
   }
