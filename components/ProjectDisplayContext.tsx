@@ -19,6 +19,7 @@ type Patch = {
 type ProjectDisplayContextValue = {
   settings: ProjectDisplaySettings;
   save: (patch: Patch) => Promise<ProjectDisplaySettings>;
+  applySettings: (next: ProjectDisplaySettings) => void;
 };
 
 const ProjectDisplayContext = createContext<ProjectDisplayContextValue | null>(
@@ -50,8 +51,12 @@ export function ProjectDisplayProvider({
     return data.settings as ProjectDisplaySettings;
   }, []);
 
+  const applySettings = useCallback((next: ProjectDisplaySettings) => {
+    setSettings(next);
+  }, []);
+
   return (
-    <ProjectDisplayContext.Provider value={{ settings, save }}>
+    <ProjectDisplayContext.Provider value={{ settings, save, applySettings }}>
       {children}
     </ProjectDisplayContext.Provider>
   );

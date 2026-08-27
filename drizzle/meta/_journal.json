@@ -134,6 +134,13 @@
       "when": 1787754100000,
       "tag": "0018_backup_kind_retag",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1787755200000,
+      "tag": "0019_vault_logo",
+      "breakpoints": true
     }
   ]
 }

@@ -100,7 +100,11 @@ export function StatusBoard() {
             ) : (
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                 {visible.map((project) => (
-                  <ThumbnailCard key={project.id} project={project} />
+                  <ThumbnailCard
+                    key={project.id}
+                    project={project}
+                    vaultLogoUrl={settings.vaultLogoUrl}
+                  />
                 ))}
               </div>
             )}
@@ -129,7 +133,13 @@ function BoardCard({ project }: { project: ProjectDTO }) {
   );
 }
 
-function ThumbnailCard({ project }: { project: ProjectDTO }) {
+function ThumbnailCard({
+  project,
+  vaultLogoUrl,
+}: {
+  project: ProjectDTO;
+  vaultLogoUrl: string;
+}) {
   return (
     <Link
       href={`/projects/${project.id}`}
@@ -143,7 +153,14 @@ function ThumbnailCard({ project }: { project: ProjectDTO }) {
           className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
         />
       ) : (
-        <div className="absolute inset-0 bg-overlay" />
+        <div className="absolute inset-0 flex items-center justify-center bg-overlay">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={vaultLogoUrl}
+            alt=""
+            className="h-[42%] w-[42%] object-contain opacity-90 transition duration-300 group-hover:scale-[1.03]"
+          />
+        </div>
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
       <div className="absolute inset-x-0 bottom-0 p-2.5">

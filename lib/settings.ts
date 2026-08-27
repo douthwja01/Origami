@@ -7,7 +7,7 @@ export const SETTINGS_NAV = [
   {
     href: "/settings/projects",
     label: "Projects",
-    description: "Vault name shown on the home screen and in navigation",
+    description: "Vault name and logo shown on the home screen and in navigation",
   },
   {
     href: "/settings/system",

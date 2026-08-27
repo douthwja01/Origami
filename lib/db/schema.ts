@@ -194,6 +194,9 @@ export const appSettings = pgTable("app_settings", {
   backupLastSummary: text("backup_last_summary"),
   theme: text("theme").notNull().default("workshop"),
   vaultName: text("vault_name").notNull().default("Workshop"),
+  vaultLogoPath: text("vault_logo_path"),
+  vaultLogoMime: text("vault_logo_mime"),
+  vaultLogoHash: text("vault_logo_hash"),
   maxUploadMb: integer("max_upload_mb"),
 });
 

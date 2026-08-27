@@ -1,5 +1,7 @@
 export const DEFAULT_VAULT_NAME = "Workshop";
 export const VAULT_NAME_MAX = 80;
+/** Default vault mark when no custom logo is uploaded. */
+export const DEFAULT_VAULT_LOGO_URL = "/icon.svg";
 export const DEFAULT_MEDIA_BACKGROUND_OPACITY = 25;
 export const MEDIA_BACKGROUND_CYCLE_MS = 12_000;
 /** Crossfade length when cycling project background media. */
@@ -9,10 +11,15 @@ export const MEDIA_BACKGROUND_OPACITY_MAX = 100;
 
 export type ProjectDisplaySettings = {
   vaultName: string;
+  /** Usable image URL: custom upload endpoint or the default Origami mark. */
+  vaultLogoUrl: string;
+  hasCustomVaultLogo: boolean;
 };
 
 export const DEFAULT_PROJECT_DISPLAY_SETTINGS: ProjectDisplaySettings = {
   vaultName: DEFAULT_VAULT_NAME,
+  vaultLogoUrl: DEFAULT_VAULT_LOGO_URL,
+  hasCustomVaultLogo: false,
 };
 
 export function parseVaultName(value: unknown): string | null {

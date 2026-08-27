@@ -765,7 +765,33 @@ export function FileBrowser({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-raised">
       <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line px-3 py-2">
-        <div className="min-w-0 flex-1" aria-hidden="true" />
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search files and tags"
+          className="min-w-[10rem] flex-1 rounded-md border border-line bg-canvas px-2.5 py-1 text-[12px] outline-none focus:border-accent"
+        />
+        <label className="flex items-center gap-1.5 text-[12px] text-muted">
+          Sort
+          <select
+            value={sort}
+            onChange={(event) => setSort(event.target.value as SortMode)}
+            className="rounded-md border border-line bg-canvas px-2 py-1 text-ink"
+          >
+            <option value="name">Name</option>
+            <option value="date">Newest</option>
+            <option value="tags">Tags</option>
+          </select>
+        </label>
+        {activeTag ? (
+          <button
+            type="button"
+            onClick={() => setTagFilter(null)}
+            className="badge badge-active"
+          >
+            {activeTag.name} ×
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => {
@@ -837,35 +863,6 @@ export function FileBrowser({
           }}
         />
       </header>
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line px-3 py-2">
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search files and tags"
-          className="min-w-[10rem] flex-1 rounded-md border border-line bg-canvas px-2.5 py-1 text-[12px] outline-none focus:border-accent"
-        />
-        <label className="flex items-center gap-1.5 text-[12px] text-muted">
-          Sort
-          <select
-            value={sort}
-            onChange={(event) => setSort(event.target.value as SortMode)}
-            className="rounded-md border border-line bg-canvas px-2 py-1 text-ink"
-          >
-            <option value="name">Name</option>
-            <option value="date">Newest</option>
-            <option value="tags">Tags</option>
-          </select>
-        </label>
-        {activeTag ? (
-          <button
-            type="button"
-            onClick={() => setTagFilter(null)}
-            className="badge badge-active"
-          >
-            {activeTag.name} ×
-          </button>
-        ) : null}
-      </div>
 
       {error ? (
         <p className="shrink-0 px-3 py-2 text-[12px] text-accent">{error}</p>

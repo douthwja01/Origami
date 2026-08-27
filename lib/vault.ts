@@ -133,3 +133,47 @@ export async function removeVaultFile(storagePath: string): Promise<void> {
 export async function removeProjectVault(projectId: string): Promise<void> {
   await rm(joinVault(projectId), { recursive: true, force: true });
 }
+
+/** Vault-wide branding / config files (not project assets). */
+export const VAULT_SETTINGS_DIR = "_settings";
+
+export function vaultSettingsFilePath(filename: string): string {
+  return joinVault(VAULT_SETTINGS_DIR, safeFilename(filename));
+}
+
+export function relativeVaultSettingsPath(filename: string): string {
+  return path.posix.join(VAULT_SETTINGS_DIR, safeFilename(filename));
+}
+
+export async function writeVaultSettingsFile(
+  filename: string,
+  data: ReadableStream<Uint8Array> | Buffer,
+): Promise<{ storagePath: string; bytes: number; sha256: string }> {
+  const dir = joinVault(VAULT_SETTINGS_DIR);
+  await mkdir(dir, { recursive: true });
+  const dest = vaultSettingsFilePath(filename);
+  const hash = createHash("sha256");
+  if (Buffer.isBuffer(data)) {
+    hash.update(data);
+    await writeFile(dest, data);
+    return {
+      storagePath: relativeVaultSettingsPath(filename),
+      bytes: data.length,
+      sha256: hash.digest("hex"),
+    };
+  }
+  const nodeStream = Readable.fromWeb(
+    data as import("node:stream/web").ReadableStream,
+  );
+  let bytes = 0;
+  nodeStream.on("data", (chunk: Buffer) => {
+    bytes += chunk.length;
+    hash.update(chunk);
+  });
+  await pipeline(nodeStream, createWriteStream(dest));
+  return {
+    storagePath: relativeVaultSettingsPath(filename),
+    bytes,
+    sha256: hash.digest("hex"),
+  };
+}
