@@ -23,44 +23,21 @@ const CadViewer = dynamic(
 export function AssetPreview({ asset }: { asset: AssetDTO }) {
   const src = `/api/assets/${asset.id}`;
   const download = `${src}?download=1`;
-  const isCad = isStlOrObj(asset.filename);
-
-  const summary = (
-    <div
-      className={`flex items-center justify-between gap-3 px-4 py-2 ${
-        isCad ? "border-t border-line" : "border-b border-line"
-      }`}
-    >
-      <div className="min-w-0">
-        <div className="truncate text-[13px]">{asset.filename}</div>
-        <div className="font-mono text-[11px] text-muted">
-          {formatBytes(asset.sizeBytes)} · {asset.mimeType}
-        </div>
-      </div>
-      <a href={download} className="shrink-0 text-[12px] text-accent">
-        Download
-      </a>
-    </div>
-  );
-
-  if (isCad) {
-    return (
-      <div className="flex h-full min-h-[320px] flex-col overflow-hidden">
-        <div className="min-h-0 flex-1 overflow-hidden">
-          <CadViewer url={src} filename={asset.filename} />
-        </div>
-        {summary}
-      </div>
-    );
-  }
 
   return (
-    <div className="flex h-full min-h-[320px] flex-col">
-      {summary}
+    <div className="flex h-full min-h-[320px] flex-col overflow-hidden">
       <div className="min-h-0 flex-1 overflow-auto">
-        {isPreviewableImage(asset.mimeType, asset.filename) ? (
+        {isStlOrObj(asset.filename) ? (
+          <div className="h-full min-h-[280px] overflow-hidden">
+            <CadViewer url={src} filename={asset.filename} />
+          </div>
+        ) : isPreviewableImage(asset.mimeType, asset.filename) ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={src} alt={asset.filename} className="mx-auto max-h-[70vh] object-contain p-4" />
+          <img
+            src={src}
+            alt={asset.filename}
+            className="mx-auto max-h-[70vh] object-contain p-4"
+          />
         ) : isPreviewableVideo(asset.mimeType, asset.filename) ? (
           <video src={src} controls className="mx-auto max-h-[70vh] w-full p-4" />
         ) : isPreviewableAudio(asset.mimeType, asset.filename) ? (
@@ -70,12 +47,27 @@ export function AssetPreview({ asset }: { asset: AssetDTO }) {
         ) : isPdf(asset.mimeType, asset.filename) ? (
           <iframe title={asset.filename} src={src} className="h-[70vh] w-full border-0" />
         ) : isTextLike(asset.mimeType, asset.filename) ? (
-          <CodeViewer url={src} filename={asset.filename} markdown={isMarkdown(asset.filename)} />
+          <CodeViewer
+            url={src}
+            filename={asset.filename}
+            markdown={isMarkdown(asset.filename)}
+          />
         ) : isArchive(asset.filename) ? (
           <EmptyNote text="Archive stored in the vault. Download to extract." />
         ) : (
           <EmptyNote text="No inline preview for this format. Download to open it locally." />
         )}
+      </div>
+      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-line px-4 py-2">
+        <div className="min-w-0">
+          <div className="truncate text-[13px]">{asset.filename}</div>
+          <div className="font-mono text-[11px] text-muted">
+            {formatBytes(asset.sizeBytes)} · {asset.mimeType}
+          </div>
+        </div>
+        <a href={download} className="shrink-0 text-[12px] text-accent">
+          Download
+        </a>
       </div>
     </div>
   );

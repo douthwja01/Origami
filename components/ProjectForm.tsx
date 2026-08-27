@@ -219,7 +219,7 @@ export function ProjectForm({
           </label>
           <label className="block">
             <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted">
-              Nested under
+              Fold under
             </span>
             <select
               value={parentId}

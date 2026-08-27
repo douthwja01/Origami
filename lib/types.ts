@@ -32,6 +32,16 @@ export const ASSET_KINDS: AssetKind[] = [
   "backup",
 ];
 
+/** Kind tabs on the project vault page (excludes system kinds like backup). */
+export const PROJECT_ASSET_KINDS = [
+  "media",
+  "code",
+  "document",
+  "cad",
+] as const satisfies readonly AssetKind[];
+
+export type ProjectAssetKind = (typeof PROJECT_ASSET_KINDS)[number];
+
 export type ProjectDTO = {
   id: string;
   code: string;

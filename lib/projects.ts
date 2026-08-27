@@ -473,7 +473,7 @@ export async function deleteProject(id: string, cascade: boolean): Promise<void>
   const kids = await descendantIds(id);
   if (!cascade && kids.length > 0) {
     throw Object.assign(
-      new Error("Project has nested projects. Pass cascade=1 to delete them too."),
+      new Error("Project has folds. Pass cascade=1 to delete them too."),
       { status: 409 },
     );
   }

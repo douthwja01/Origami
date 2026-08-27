@@ -40,7 +40,7 @@ export function StatusBoard() {
             {settings.vaultName}
           </h1>
           <p className="text-[13px] text-muted">
-            Nested projects and a vault for media, code, documents, and CAD.
+            Projects, folds, and a vault for media, code, documents, and CAD.
           </p>
         </div>
         <label className="flex items-center gap-2 text-[12px] text-muted">
@@ -126,7 +126,9 @@ function BoardCard({ project }: { project: ProjectDTO }) {
       <div className="mt-1 flex justify-between text-[11px] text-muted">
         <span>{formatDate(project.startDate)}</span>
         <span>
-          {project.childCount} nested · {project.assetCount} files
+          {project.childCount}{" "}
+          {project.childCount === 1 ? "fold" : "folds"} · {project.assetCount}{" "}
+          files
         </span>
       </div>
     </Link>

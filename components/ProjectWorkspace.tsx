@@ -161,7 +161,7 @@ export function ProjectWorkspace({ id }: { id: string }) {
                   <IconPencil />
                 </IconButton>
                 <IconButton
-                  label="New child"
+                  label="New fold"
                   onClick={() => setCreatingChild(true)}
                 >
                   <IconNewChild />
@@ -213,12 +213,12 @@ export function ProjectWorkspace({ id }: { id: string }) {
                     projectId={project.id}
                     assets={data?.assets ?? []}
                     folders={data?.folders ?? []}
-                    nested={data?.children ?? []}
+                    folds={data?.children ?? []}
                     tags={data?.tags ?? []}
                     onChanged={async () => {
                       await Promise.all([load(), refresh()]);
                     }}
-                    onNewChild={() => setCreatingChild(true)}
+                    onNewFold={() => setCreatingChild(true)}
                   />
                 </Suspense>
               )}
@@ -242,7 +242,7 @@ export function ProjectWorkspace({ id }: { id: string }) {
       ) : null}
       {creatingChild && project ? (
         <ProjectForm
-          title="New nested project"
+          title="New fold"
           defaultParentId={project.id}
           onClose={() => setCreatingChild(false)}
           onSaved={() => {
@@ -255,8 +255,7 @@ export function ProjectWorkspace({ id }: { id: string }) {
           <div className="w-full max-w-md rounded-xl border border-line bg-raised p-5">
             <h2 className="text-[16px] font-medium">Delete {project.code}?</h2>
             <p className="mt-2 text-[13px] text-muted">
-              Nested projects and vault files are kept unless you delete them
-              too.
+              Folds and vault files are kept unless you delete them too.
             </p>
             {error ? <p className="mt-2 text-[13px] text-accent">{error}</p> : null}
             <div className="mt-4 flex flex-wrap justify-end gap-2">
@@ -281,7 +280,7 @@ export function ProjectWorkspace({ id }: { id: string }) {
                 onClick={() => remove(true)}
                 className="rounded-md bg-accent px-3 py-2 text-[13px] text-canvas"
               >
-                Delete with nested + files
+                Delete with folds + files
               </button>
             </div>
           </div>

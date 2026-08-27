@@ -48,12 +48,12 @@ export function ProjectSidebar({ projectId }: { projectId: string }) {
 
       <div className="flex min-h-0 flex-1 flex-col">
         <p className="px-3 pt-3 text-[11px] uppercase tracking-wider text-muted">
-          Nested projects
+          Folds
         </p>
         <ProjectTree
           roots={node?.children ?? []}
-          searchPlaceholder="Search nested"
-          emptyLabel="No nested projects."
+          searchPlaceholder="Search folds"
+          emptyLabel="No folds."
         />
       </div>
     </div>

@@ -1,12 +1,22 @@
-import { ASSET_KINDS, type AssetKind } from "@/lib/types";
+import {
+  PROJECT_ASSET_KINDS,
+  type ProjectAssetKind,
+} from "@/lib/types";
 
-export type ProjectView = "overview" | AssetKind | "nested" | "stats";
+export type ProjectView =
+  | "overview"
+  | ProjectAssetKind
+  | "folds"
+  | "stats";
 
 export function parseProjectView(value: string | null): ProjectView {
-  if (value === "nested") return "nested";
+  if (value === "folds" || value === "nested") return "folds";
   if (value === "stats") return "stats";
-  if (value && ASSET_KINDS.includes(value as AssetKind)) {
-    return value as AssetKind;
+  if (
+    value &&
+    (PROJECT_ASSET_KINDS as readonly string[]).includes(value)
+  ) {
+    return value as ProjectAssetKind;
   }
   return "overview";
 }

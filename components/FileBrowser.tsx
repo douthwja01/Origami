@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { AssetPreview } from "@/components/AssetPreview";
 import { TagChips, TagContextMenu } from "@/components/TagMenu";
 import { ToastStack, type Toast } from "@/components/ToastStack";
-import { formatBytes, kindLabel, statusLabel } from "@/lib/format";
+import { formatBytes, kindLabel } from "@/lib/format";
 import {
   directChildFolderName,
   isUnderFolderPath,
@@ -22,7 +21,6 @@ import {
   type AssetDTO,
   type AssetKind,
   type FolderDTO,
-  type ProjectDTO,
   type TagDTO,
 } from "@/lib/types";
 
@@ -33,7 +31,6 @@ type SortMode = "name" | "date" | "tags";
 type Selection =
   | { type: "folder"; path: string }
   | { type: "file"; id: string }
-  | { type: "projects" }
   | null;
 
 type MenuState = {
@@ -55,26 +52,20 @@ type Props = {
   projectId: string;
   assets: AssetDTO[];
   folders: FolderDTO[];
-  nested: ProjectDTO[];
   tags: TagDTO[];
   rootLabel?: string;
   filterKind?: AssetKind;
   onChanged: () => Promise<void>;
-  onNewChild: () => void;
-  onOpenProjects?: () => void;
 };
 
 export function FileBrowser({
   projectId,
   assets,
   folders,
-  nested,
   tags: catalog,
   rootLabel = "Vault",
   filterKind,
   onChanged,
-  onNewChild,
-  onOpenProjects,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [path, setPath] = useState("");
@@ -756,9 +747,8 @@ export function FileBrowser({
     })),
   ];
 
-  const showProjects = !filterKind && !path && !filtering;
   const emptyTree =
-    !filtering && childFolders.length === 0 && childFiles.length === 0 && !showProjects;
+    !filtering && childFolders.length === 0 && childFiles.length === 0;
   const emptySearch =
     filtering && listedFolders.length === 0 && listedFiles.length === 0;
 
@@ -988,28 +978,6 @@ export function FileBrowser({
                   </li>
                 );
               })}
-              {showProjects ? (
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => setSelection({ type: "projects" })}
-                    onDoubleClick={() => onOpenProjects?.()}
-                    className={`flex w-full items-center gap-2 px-3 py-2 text-left ${
-                      selection?.type === "projects"
-                        ? "bg-overlay"
-                        : "hover:bg-overlay/60"
-                    }`}
-                  >
-                    <FolderIcon />
-                    <span className="min-w-0 flex-1 truncate text-[13px]">
-                      Projects
-                    </span>
-                    <span className="font-mono text-[11px] text-muted">
-                      {nested.length}
-                    </span>
-                  </button>
-                </li>
-              ) : null}
               {listedFiles.map((asset) => {
                 const selected =
                   selection?.type === "file" && selection.id === asset.id;
@@ -1097,43 +1065,6 @@ export function FileBrowser({
                   />
                 </div>
               ) : null}
-            </div>
-          ) : selection?.type === "projects" ? (
-            <div className="overflow-auto p-4">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h2 className="text-[13px] font-medium">Child projects</h2>
-                <button
-                  type="button"
-                  onClick={onNewChild}
-                  className="text-[12px] text-muted hover:text-ink"
-                >
-                  New
-                </button>
-              </div>
-              {nested.length === 0 ? (
-                <p className="text-[13px] text-muted">No child projects yet.</p>
-              ) : (
-                <ul className="divide-y divide-line rounded-lg border border-line">
-                  {nested.map((child) => (
-                    <li key={child.id}>
-                      <Link
-                        href={`/projects/${child.id}`}
-                        className="flex items-center gap-2 px-3 py-2 hover:bg-overlay/60"
-                      >
-                        <span className={`status-dot ${child.status}`} />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[13px]">
-                            {child.title}
-                          </span>
-                          <span className="block font-mono text-[11px] text-muted">
-                            {child.code} · {statusLabel(child.status)}
-                          </span>
-                        </span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </div>
           ) : (
             <EmptyPane text="Select a file to preview, or open a folder." />

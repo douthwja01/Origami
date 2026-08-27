@@ -5,14 +5,14 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FileBrowser } from "@/components/FileBrowser";
 import { useProjects } from "@/components/ProjectsContext";
-import { formatBytes, formatDate, kindLabel, statusLabel } from "@/lib/format";
+import { formatBytes, kindLabel, statusLabel } from "@/lib/format";
 import {
   parseProjectView,
   projectViewHref,
   type ProjectView,
 } from "@/lib/project-view";
 import {
-  ASSET_KINDS,
+  PROJECT_ASSET_KINDS,
   type AssetDTO,
   type AssetKind,
   type FolderDTO,
@@ -26,20 +26,20 @@ type Props = {
   projectId: string;
   assets: AssetDTO[];
   folders: FolderDTO[];
-  nested: ProjectDTO[];
+  folds: ProjectDTO[];
   tags: TagDTO[];
   onChanged: () => Promise<void>;
-  onNewChild: () => void;
+  onNewFold: () => void;
 };
 
 export function VaultExplorer({
   projectId,
   assets,
   folders,
-  nested,
+  folds,
   tags,
   onChanged,
-  onNewChild,
+  onNewFold,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -73,7 +73,7 @@ export function VaultExplorer({
     return { counts, sizes, totalBytes };
   }, [assets]);
 
-  const kindFolder = ASSET_KINDS.includes(tab as AssetKind)
+  const kindFolder = (PROJECT_ASSET_KINDS as readonly string[]).includes(tab)
     ? (tab as AssetKind)
     : null;
 
@@ -100,7 +100,7 @@ export function VaultExplorer({
           active={tab === "overview"}
           onClick={() => openTab("overview")}
         />
-        {ASSET_KINDS.map((kind) => (
+        {PROJECT_ASSET_KINDS.map((kind) => (
           <Tab
             key={kind}
             label={kindLabel(kind)}
@@ -110,10 +110,10 @@ export function VaultExplorer({
           />
         ))}
         <Tab
-          label="Projects"
-          count={nested.length}
-          active={tab === "nested"}
-          onClick={() => openTab("nested")}
+          label="Folds"
+          count={folds.length}
+          active={tab === "folds"}
+          onClick={() => openTab("folds")}
         />
         <Tab
           label="Statistics"
@@ -122,52 +122,52 @@ export function VaultExplorer({
         />
       </nav>
 
-      {tab === "stats" ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto">
-          <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
-            <RecentFilesCard
-              recent={recent}
-              onOpenFile={() => openTab("overview")}
-            />
-            <StatisticsCard
-              counts={counts}
-              sizes={sizes}
-              totalBytes={totalBytes}
-              onOpenTab={openTab}
-            />
-          </div>
-          <ChildProjectsCard nested={nested} onNewChild={onNewChild} />
-        </div>
-      ) : tab === "nested" ? (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-raised">
-          <header className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2">
-            <div className="min-w-0 flex-1 text-[12px] text-muted">
-              Nested projects
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {tab === "stats" ? (
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto">
+            <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
+              <RecentFilesCard
+                recent={recent}
+                onOpenFile={() => openTab("overview")}
+              />
+              <StatisticsCard
+                counts={counts}
+                sizes={sizes}
+                totalBytes={totalBytes}
+                onOpenTab={openTab}
+              />
             </div>
-            <button
-              type="button"
-              onClick={onNewChild}
-              className="rounded-md bg-accent px-2.5 py-1 text-[12px] text-canvas"
-            >
-              New project
-            </button>
-          </header>
-          <NestedList nested={nested} />
-        </div>
-      ) : (
-        <FileBrowser
-          projectId={projectId}
-          assets={assets}
-          folders={folders}
-          nested={nested}
-          tags={tags}
-          rootLabel={projectCode}
-          filterKind={kindFolder ?? undefined}
-          onChanged={onChanged}
-          onNewChild={onNewChild}
-          onOpenProjects={() => openTab("nested")}
-        />
-      )}
+          </div>
+        ) : tab === "folds" ? (
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-raised">
+            <header className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2">
+              <div className="min-w-0 flex-1 text-[12px] text-muted">Folds</div>
+              <button
+                type="button"
+                onClick={onNewFold}
+                className="rounded-md bg-accent px-2.5 py-1 text-[12px] text-canvas"
+              >
+                New fold
+              </button>
+            </header>
+            <FoldsPanel folds={folds} />
+          </div>
+        ) : (
+          <FileBrowser
+            projectId={projectId}
+            assets={assets}
+            folders={folders}
+            tags={tags}
+            rootLabel={projectCode}
+            filterKind={kindFolder ?? undefined}
+            onChanged={onChanged}
+          />
+        )}
+      </div>
+
+      {tab !== "folds" ? (
+        <FoldsCard folds={folds} onNewFold={onNewFold} />
+      ) : null}
     </div>
   );
 }
@@ -212,7 +212,10 @@ function StatisticsCard({
   totalBytes: number;
   onOpenTab: (tab: TabId) => void;
 }) {
-  const totalFiles = ASSET_KINDS.reduce((sum, kind) => sum + counts[kind], 0);
+  const totalFiles = PROJECT_ASSET_KINDS.reduce(
+    (sum, kind) => sum + counts[kind],
+    0,
+  );
 
   return (
     <section className="rounded-xl border border-line bg-raised">
@@ -224,7 +227,7 @@ function StatisticsCard({
         </span>
       </div>
       <div className="grid grid-cols-2 gap-2 border-t border-line p-3">
-        {ASSET_KINDS.map((kind) => (
+        {PROJECT_ASSET_KINDS.map((kind) => (
           <button
             key={kind}
             type="button"
@@ -288,80 +291,80 @@ function RecentFilesCard({
   );
 }
 
-function ChildProjectsCard({
-  nested,
-  onNewChild,
+function FoldsPanel({ folds }: { folds: ProjectDTO[] }) {
+  if (folds.length === 0) {
+    return (
+      <div className="flex h-full min-h-[220px] items-center justify-center px-6 text-center text-[13px] text-muted">
+        No folds yet.
+      </div>
+    );
+  }
+  return (
+    <div className="h-full overflow-auto p-3 lg:p-4">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))] gap-2">
+        {folds.map((fold) => (
+          <Link
+            key={fold.id}
+            href={`/projects/${fold.id}`}
+            className="block rounded-lg border border-line bg-canvas px-3 py-2.5 hover:border-accent/50"
+          >
+            <div className="font-mono text-[11px] text-muted">{fold.code}</div>
+            <div className="truncate text-[13px] text-ink">{fold.title}</div>
+            <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted">
+              <span className={`status-dot ${fold.status}`} />
+              {statusLabel(fold.status)}
+            </div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FoldsCard({
+  folds,
+  onNewFold,
 }: {
-  nested: ProjectDTO[];
-  onNewChild: () => void;
+  folds: ProjectDTO[];
+  onNewFold: () => void;
 }) {
   return (
     <section className="shrink-0 rounded-xl border border-line bg-raised">
       <div className="flex items-center justify-between gap-2 px-4 py-3">
-        <h2 className="text-[13px] font-medium">Child projects</h2>
+        <h2 className="text-[13px] font-medium">Folds</h2>
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[11px] text-muted">{nested.length}</span>
+          <span className="font-mono text-[11px] text-muted">{folds.length}</span>
           <button
             type="button"
-            onClick={onNewChild}
+            onClick={onNewFold}
             className="text-[12px] text-muted hover:text-ink"
           >
             New
           </button>
         </div>
       </div>
-      {nested.length === 0 ? (
+      {folds.length === 0 ? (
         <p className="border-t border-line px-4 py-3 text-[13px] text-muted">
-          No child projects yet.
+          No folds yet.
         </p>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))] gap-2 border-t border-line p-3 lg:p-4">
-          {nested.map((child) => (
+          {folds.map((fold) => (
             <Link
-              key={child.id}
-              href={`/projects/${child.id}`}
+              key={fold.id}
+              href={`/projects/${fold.id}`}
               className="block rounded-lg border border-line bg-canvas px-3 py-2.5 hover:border-accent/50"
             >
-              <div className="font-mono text-[11px] text-muted">{child.code}</div>
-              <div className="truncate text-[13px] text-ink">{child.title}</div>
+              <div className="font-mono text-[11px] text-muted">{fold.code}</div>
+              <div className="truncate text-[13px] text-ink">{fold.title}</div>
               <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted">
-                <span className={`status-dot ${child.status}`} />
-                {statusLabel(child.status)}
+                <span className={`status-dot ${fold.status}`} />
+                {statusLabel(fold.status)}
               </div>
             </Link>
           ))}
         </div>
       )}
     </section>
-  );
-}
-
-function NestedList({ nested }: { nested: ProjectDTO[] }) {
-  if (nested.length === 0) {
-    return (
-      <div className="flex h-full min-h-[220px] items-center justify-center px-6 text-center text-[13px] text-muted">
-        No nested projects yet.
-      </div>
-    );
-  }
-  return (
-    <ul className="h-full overflow-auto">
-      {nested.map((child) => (
-        <li key={child.id}>
-          <Link
-            href={`/projects/${child.id}`}
-            className="flex items-center gap-2 px-3 py-2 hover:bg-overlay/60"
-          >
-            <span className={`status-dot ${child.status}`} />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[13px]">{child.title}</span>
-              <span className="block font-mono text-[11px] text-muted">
-                {child.code} · {formatDate(child.startDate)}
-              </span>
-            </span>
-          </Link>
-        </li>
-      ))}
-    </ul>
   );
 }

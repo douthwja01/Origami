@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Origami",
-  description: "Nested project vault for media, code, documents, and CAD",
+  description: "Project vault with folds for media, code, documents, and CAD",
 };
 
 export const dynamic = "force-dynamic";
