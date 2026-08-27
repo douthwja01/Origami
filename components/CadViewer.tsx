@@ -6,35 +6,50 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { extensionOf } from "@/lib/kinds";
+import { isLightTheme } from "@/lib/themes";
 
-const AXIS_VIEW_SIZE = 96;
+const AXIS_VIEW_SIZE = 64;
+const ORIGIN = new THREE.Vector3(0, 0, 0);
+
+function viewerBackgroundColor() {
+  const theme = document.documentElement.getAttribute("data-theme");
+  return isLightTheme(theme) ? 0xffffff : 0x000000;
+}
 
 export function CadViewer({ url, filename }: { url: string; filename: string }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const axisHostRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const mount = hostRef.current;
-    const axisMount = axisHostRef.current;
-    if (!mount || !axisMount) return;
+    const mountEl = hostRef.current;
+    const axisMountEl = axisHostRef.current;
+    if (!mountEl || !axisMountEl) return;
+    const mount: HTMLDivElement = mountEl;
+    const axisMount: HTMLDivElement = axisMountEl;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x171a1d);
+    scene.background = new THREE.Color(viewerBackgroundColor());
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 5000);
     camera.position.set(2, 1.4, 2);
+    camera.lookAt(ORIGIN);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // updateStyle must stay true: otherwise the buffer is pixelRatio-scaled but the
+    // canvas CSS size is not, and overflow clipping makes the model look off-center.
+    renderer.setSize(mount.clientWidth || 1, mount.clientHeight || 1);
     mount.appendChild(renderer.domElement);
 
     const axisRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    axisRenderer.setPixelRatio(window.devicePixelRatio);
+    axisRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     axisRenderer.setClearColor(0x000000, 0);
     axisRenderer.setSize(AXIS_VIEW_SIZE, AXIS_VIEW_SIZE);
     axisMount.appendChild(axisRenderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
+    controls.target.copy(ORIGIN);
+    controls.update();
 
     scene.add(new THREE.AmbientLight(0xf3efe6, 0.55));
     const key = new THREE.DirectionalLight(0xe08a4a, 1.1);
@@ -51,30 +66,91 @@ export function CadViewer({ url, filename }: { url: string; filename: string }) 
     });
 
     const { axisScene, axisCamera, disposeAxis } = createAxisGroup();
+    const modelRoot = new THREE.Group();
+    scene.add(modelRoot);
 
     let frame = 0;
     let disposed = false;
+    let modelReady = false;
+    let hasFramed = false;
 
-    function resize() {
-      const node = hostRef.current;
-      if (!node) return;
-      const w = Math.max(node.clientWidth, 1);
-      const h = Math.max(node.clientHeight, 1);
+    function syncSize() {
+      const w = Math.max(mount.clientWidth, 1);
+      const h = Math.max(mount.clientHeight, 1);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
-      renderer.setSize(w, h, false);
+      renderer.setSize(w, h);
       axisRenderer.setSize(AXIS_VIEW_SIZE, AXIS_VIEW_SIZE);
+      return w > 1 && h > 1;
     }
 
-    function frameObject(object: THREE.Object3D) {
-      const box = new THREE.Box3().setFromObject(object);
-      const size = box.getSize(new THREE.Vector3()).length();
+    function placeModelAtOrigin(object: THREE.Object3D) {
+      modelRoot.clear();
+      modelRoot.position.copy(ORIGIN);
+      modelRoot.rotation.set(0, 0, 0);
+      modelRoot.scale.set(1, 1, 1);
+      modelRoot.add(object);
+
+      object.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.computeBoundingBox();
+          child.geometry.computeBoundingSphere();
+        }
+      });
+      object.updateMatrixWorld(true);
+
+      const box = new THREE.Box3().setFromObject(object, true);
+      if (box.isEmpty()) return;
+
       const center = box.getCenter(new THREE.Vector3());
-      controls.target.copy(center);
-      camera.position.copy(center).add(new THREE.Vector3(size * 0.6, size * 0.45, size * 0.6));
-      camera.near = size / 100;
-      camera.far = size * 10;
+      object.position.x -= center.x;
+      object.position.y -= center.y;
+      object.position.z -= center.z;
+      object.updateMatrixWorld(true);
+
+      const settled = new THREE.Box3().setFromObject(modelRoot, true);
+      if (!settled.isEmpty()) {
+        modelRoot.position.sub(settled.getCenter(new THREE.Vector3()));
+        modelRoot.updateMatrixWorld(true);
+      }
+    }
+
+    function frameCameraOnOrigin() {
+      if (!syncSize()) return false;
+
+      modelRoot.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(modelRoot, true);
+      if (box.isEmpty()) return false;
+
+      const sphere = box.getBoundingSphere(new THREE.Sphere());
+      const radius = Math.max(sphere.radius, 1e-6);
+
+      const halfFovY = THREE.MathUtils.degToRad(camera.fov * 0.5);
+      const distY = radius / Math.sin(halfFovY);
+      const halfFovX = Math.atan(Math.tan(halfFovY) * Math.max(camera.aspect, 1e-6));
+      const distX = radius / Math.sin(halfFovX);
+      const distance = Math.max(distX, distY) * 1.35;
+
+      const offset = new THREE.Vector3(1, 0.75, 1).normalize().multiplyScalar(distance);
+
+      controls.target.copy(ORIGIN);
+      camera.up.set(0, 1, 0);
+      camera.position.copy(offset);
+      camera.near = Math.max(distance / 100, 0.01);
+      camera.far = Math.max(distance * 100, 100);
+      camera.lookAt(ORIGIN);
       camera.updateProjectionMatrix();
+      controls.update();
+      hasFramed = true;
+      return true;
+    }
+
+    function showObject(object: THREE.Object3D) {
+      placeModelAtOrigin(object);
+      modelReady = true;
+      if (!frameCameraOnOrigin()) {
+        hasFramed = false;
+      }
     }
 
     async function load() {
@@ -84,19 +160,22 @@ export function CadViewer({ url, filename }: { url: string; filename: string }) 
         const geometry = await loader.loadAsync(url);
         geometry.center();
         geometry.computeVertexNormals();
+        geometry.computeBoundingBox();
+        geometry.computeBoundingSphere();
         const mesh = new THREE.Mesh(geometry, material);
-        scene.add(mesh);
-        frameObject(mesh);
+        mesh.position.copy(ORIGIN);
+        showObject(mesh);
       } else {
         const loader = new OBJLoader();
         const group = await loader.loadAsync(url);
         group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
             child.material = material;
+            child.geometry.computeBoundingBox();
+            child.geometry.computeBoundingSphere();
           }
         });
-        scene.add(group);
-        frameObject(group);
+        showObject(group);
       }
     }
 
@@ -105,17 +184,30 @@ export function CadViewer({ url, filename }: { url: string; filename: string }) 
       controls.update();
       renderer.render(scene, camera);
 
-      axisCamera.position.copy(camera.position).sub(controls.target).normalize().multiplyScalar(2.4);
+      axisCamera.position.copy(camera.position).sub(controls.target).setLength(2.4);
       axisCamera.up.copy(camera.up);
-      axisCamera.lookAt(0, 0, 0);
+      axisCamera.lookAt(ORIGIN);
       axisRenderer.render(axisScene, axisCamera);
 
       frame = requestAnimationFrame(tick);
     }
 
-    resize();
-    const observer = new ResizeObserver(resize);
+    syncSize();
+    const observer = new ResizeObserver(() => {
+      const sized = syncSize();
+      // Frame once the layout has a real size (common on first paint).
+      if (modelReady && sized && !hasFramed) {
+        frameCameraOnOrigin();
+      }
+    });
     observer.observe(mount);
+    const themeObserver = new MutationObserver(() => {
+      scene.background = new THREE.Color(viewerBackgroundColor());
+    });
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
     load().catch(() => undefined);
     tick();
 
@@ -123,6 +215,7 @@ export function CadViewer({ url, filename }: { url: string; filename: string }) 
       disposed = true;
       cancelAnimationFrame(frame);
       observer.disconnect();
+      themeObserver.disconnect();
       controls.dispose();
       disposeAxis();
       material.dispose();
@@ -135,7 +228,7 @@ export function CadViewer({ url, filename }: { url: string; filename: string }) 
 
   return (
     <div className="relative h-full w-full overflow-hidden">
-      <div ref={hostRef} className="h-full w-full [&>canvas]:block" />
+      <div ref={hostRef} className="h-full w-full [&>canvas]:block [&>canvas]:h-full [&>canvas]:w-full" />
       <div
         ref={axisHostRef}
         className="pointer-events-none absolute top-2 right-2 overflow-hidden rounded-md [&>canvas]:block"
@@ -151,7 +244,6 @@ function createAxisGroup() {
   const axisCamera = new THREE.PerspectiveCamera(50, 1, 0.1, 10);
   axisCamera.position.set(0, 0, 2.4);
 
-  const origin = new THREE.Vector3(0, 0, 0);
   const axes: { dir: THREE.Vector3; color: number; label: string }[] = [
     { dir: new THREE.Vector3(1, 0, 0), color: 0xe05858, label: "X" },
     { dir: new THREE.Vector3(0, 1, 0), color: 0x5aa86a, label: "Y" },
@@ -161,11 +253,11 @@ function createAxisGroup() {
   const disposables: { dispose: () => void }[] = [];
 
   for (const axis of axes) {
-    const arrow = new THREE.ArrowHelper(axis.dir, origin, 0.85, axis.color, 0.22, 0.14);
+    const arrow = new THREE.ArrowHelper(axis.dir, ORIGIN, 0.7, axis.color, 0.18, 0.11);
     axisScene.add(arrow);
 
     const sprite = makeAxisLabel(axis.label, axis.color);
-    sprite.position.copy(axis.dir).multiplyScalar(1.05);
+    sprite.position.copy(axis.dir).multiplyScalar(0.88);
     axisScene.add(sprite);
     if (sprite.material.map) disposables.push(sprite.material.map);
     disposables.push(sprite.material);
@@ -204,6 +296,6 @@ function makeAxisLabel(text: string, color: number) {
     transparent: true,
   });
   const sprite = new THREE.Sprite(material);
-  sprite.scale.setScalar(0.38);
+  sprite.scale.setScalar(0.32);
   return sprite;
 }

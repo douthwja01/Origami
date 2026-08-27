@@ -768,14 +768,6 @@ export function FileBrowser({
         <div className="min-w-0 flex-1" aria-hidden="true" />
         <button
           type="button"
-          onClick={goUp}
-          disabled={!path}
-          className="rounded-md border border-line px-2.5 py-1 text-[12px] text-muted hover:border-accent hover:text-ink disabled:opacity-40"
-        >
-          Up
-        </button>
-        <button
-          type="button"
           onClick={() => {
             setError(null);
             setNewName("");
@@ -922,12 +914,28 @@ export function FileBrowser({
             ))}
           </nav>
           <div className="min-h-0 flex-1 overflow-auto">
-          {emptyTree ? (
-            <EmptyPane text="Empty folder. Use New folder / New file / Upload, or drop files and folders here." />
-          ) : emptySearch ? (
-            <EmptyPane text="No files or folders match this search." />
-          ) : (
             <ul>
+              <li>
+                <button
+                  type="button"
+                  onClick={goUp}
+                  disabled={!path}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-muted hover:bg-overlay/60 hover:text-ink disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted"
+                >
+                  <UpIcon />
+                  <span className="truncate text-[13px]">Up</span>
+                </button>
+              </li>
+              {emptyTree ? (
+                <li>
+                  <EmptyPane text="Empty folder. Use New folder / New file / Upload, or drop files and folders here." />
+                </li>
+              ) : emptySearch ? (
+                <li>
+                  <EmptyPane text="No files or folders match this search." />
+                </li>
+              ) : (
+                <>
               {listedFolders.map((folder) => {
                 const selected =
                   selection?.type === "folder" && selection.path === folder.path;
@@ -983,6 +991,28 @@ export function FileBrowser({
                   </li>
                 );
               })}
+              {showProjects ? (
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => setSelection({ type: "projects" })}
+                    onDoubleClick={() => onOpenProjects?.()}
+                    className={`flex w-full items-center gap-2 px-3 py-2 text-left ${
+                      selection?.type === "projects"
+                        ? "bg-overlay"
+                        : "hover:bg-overlay/60"
+                    }`}
+                  >
+                    <FolderIcon />
+                    <span className="min-w-0 flex-1 truncate text-[13px]">
+                      Projects
+                    </span>
+                    <span className="font-mono text-[11px] text-muted">
+                      {nested.length}
+                    </span>
+                  </button>
+                </li>
+              ) : null}
               {listedFiles.map((asset) => {
                 const selected =
                   selection?.type === "file" && selection.id === asset.id;
@@ -1035,30 +1065,9 @@ export function FileBrowser({
                   </li>
                 );
               })}
-              {showProjects ? (
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => setSelection({ type: "projects" })}
-                    onDoubleClick={() => onOpenProjects?.()}
-                    className={`flex w-full items-center gap-2 px-3 py-2 text-left ${
-                      selection?.type === "projects"
-                        ? "bg-overlay"
-                        : "hover:bg-overlay/60"
-                    }`}
-                  >
-                    <FolderIcon />
-                    <span className="min-w-0 flex-1 truncate text-[13px]">
-                      Projects
-                    </span>
-                    <span className="font-mono text-[11px] text-muted">
-                      {nested.length}
-                    </span>
-                  </button>
-                </li>
-              ) : null}
+                </>
+              )}
             </ul>
-          )}
           </div>
         </div>
 
@@ -1352,6 +1361,20 @@ function FolderIcon() {
         d="M2.5 4.2h4.1l1.2 1.3H13.5v6.3H2.5V4.2Z"
         stroke="currentColor"
         strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function UpIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" className="shrink-0">
+      <path
+        d="M8 12.5V3.5M8 3.5 4.5 7M8 3.5 11.5 7"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
         strokeLinejoin="round"
       />
     </svg>

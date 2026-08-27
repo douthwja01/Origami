@@ -126,3 +126,8 @@ export function parseThemeId(value: unknown): ThemeId {
 export function themeById(id: ThemeId): ThemeDefinition {
   return THEMES.find((theme) => theme.id === id) ?? THEMES[0];
 }
+
+/** Opal is the only light theme; all others are dark. */
+export function isLightTheme(id: string | null | undefined): boolean {
+  return id === "opal";
+}
