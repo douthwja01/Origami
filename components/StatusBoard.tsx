@@ -58,29 +58,53 @@ export function StatusBoard() {
       {loading ? (
         <p className="text-muted">Loading…</p>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {BOARD_STATUSES.map((status) => (
-            <section key={status} className="rounded-xl border border-line bg-raised p-3">
-              <header className="mb-3 flex items-center justify-between">
-                <span className="flex items-center gap-2 text-[12px] uppercase tracking-wider text-muted">
-                  <span className={`status-dot ${status}`} />
-                  {statusLabel(status)}
-                </span>
-                <span className="font-mono text-[11px] text-muted">
-                  {grouped[status].length}
-                </span>
-              </header>
-              <div className="flex flex-col gap-2">
-                {grouped[status].length === 0 ? (
-                  <p className="px-1 py-6 text-center text-[12px] text-muted">Empty</p>
-                ) : (
-                  grouped[status].map((project) => (
-                    <BoardCard key={project.id} project={project} />
-                  ))
-                )}
+        <div className="flex flex-col gap-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {BOARD_STATUSES.map((status) => (
+              <section key={status} className="rounded-xl border border-line bg-raised p-3">
+                <header className="mb-3 flex items-center justify-between">
+                  <span className="flex items-center gap-2 text-[12px] uppercase tracking-wider text-muted">
+                    <span className={`status-dot ${status}`} />
+                    {statusLabel(status)}
+                  </span>
+                  <span className="font-mono text-[11px] text-muted">
+                    {grouped[status].length}
+                  </span>
+                </header>
+                <div className="flex flex-col gap-2">
+                  {grouped[status].length === 0 ? (
+                    <p className="px-1 py-6 text-center text-[12px] text-muted">Empty</p>
+                  ) : (
+                    grouped[status].map((project) => (
+                      <BoardCard key={project.id} project={project} />
+                    ))
+                  )}
+                </div>
+              </section>
+            ))}
+          </div>
+
+          <section className="rounded-xl border border-line bg-raised p-3">
+            <header className="mb-3 flex items-center justify-between">
+              <span className="text-[12px] uppercase tracking-wider text-muted">
+                Projects
+              </span>
+              <span className="font-mono text-[11px] text-muted">
+                {visible.length}
+              </span>
+            </header>
+            {visible.length === 0 ? (
+              <p className="px-1 py-8 text-center text-[12px] text-muted">
+                No projects yet
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                {visible.map((project) => (
+                  <ThumbnailCard key={project.id} project={project} />
+                ))}
               </div>
-            </section>
-          ))}
+            )}
+          </section>
         </div>
       )}
     </div>
@@ -100,6 +124,34 @@ function BoardCard({ project }: { project: ProjectDTO }) {
         <span>
           {project.childCount} nested · {project.assetCount} files
         </span>
+      </div>
+    </Link>
+  );
+}
+
+function ThumbnailCard({ project }: { project: ProjectDTO }) {
+  return (
+    <Link
+      href={`/projects/${project.id}`}
+      className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-line bg-canvas hover:border-accent/50"
+    >
+      {project.thumbnailAssetId ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`/api/assets/${project.thumbnailAssetId}`}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+        />
+      ) : (
+        <div className="absolute inset-0 bg-overlay" />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
+      <div className="absolute inset-x-0 bottom-0 p-2.5">
+        <div className="flex items-center gap-1.5">
+          <span className={`status-dot ${project.status}`} />
+          <span className="font-mono text-[10px] text-white/70">{project.code}</span>
+        </div>
+        <div className="mt-0.5 truncate text-[13px] text-white">{project.title}</div>
       </div>
     </Link>
   );

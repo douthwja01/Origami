@@ -1,14 +1,14 @@
 export function formatBytes(bytes: number): string {
   const n = Number(bytes);
   if (!Number.isFinite(n) || n <= 0) return "0 B";
-  if (n < 1024) return `${Math.round(n)} B`;
-  const units = ["KB", "MB", "GB", "TB"] as const;
+  const units = ["B", "KB", "MB", "GB", "TB"] as const;
   let value = n;
   let unit = 0;
   while (value >= 1024 && unit < units.length - 1) {
     value /= 1024;
     unit += 1;
   }
+  if (unit === 0) return `${Math.round(value)} B`;
   const rounded =
     value < 10 ? value.toFixed(1) : value < 100 ? value.toFixed(1) : String(Math.round(value));
   return `${rounded} ${units[unit]}`;

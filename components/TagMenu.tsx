@@ -56,6 +56,7 @@ type Props = {
   onClose: () => void;
   onNewFolder?: () => void;
   onDownload?: () => void;
+  onRename?: () => void;
   onDelete?: () => void;
 };
 
@@ -68,6 +69,7 @@ export function TagContextMenu({
   onClose,
   onNewFolder,
   onDownload,
+  onRename,
   onDelete,
 }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -225,7 +227,7 @@ export function TagContextMenu({
           </button>
         ) : null}
       </div>
-      {onNewFolder || onDownload || onDelete ? (
+      {onNewFolder || onDownload || onRename || onDelete ? (
         <div className="border-t border-line py-1">
           {onNewFolder ? (
             <button
@@ -251,6 +253,19 @@ export function TagContextMenu({
               className="flex w-full px-3 py-1.5 text-left text-[13px] hover:bg-overlay"
             >
               Download
+            </button>
+          ) : null}
+          {onRename ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                onRename();
+                onClose();
+              }}
+              className="flex w-full px-3 py-1.5 text-left text-[13px] hover:bg-overlay"
+            >
+              Rename
             </button>
           ) : null}
           {onDelete ? (

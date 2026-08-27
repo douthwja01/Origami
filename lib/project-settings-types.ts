@@ -38,3 +38,12 @@ export function clampMediaBackgroundOpacity(value: number): number {
     Math.max(MEDIA_BACKGROUND_OPACITY_MIN, Math.round(value)),
   );
 }
+
+export type { MediaBackgroundMode } from "@/lib/project-background";
+export {
+  isMediaBackgroundMode,
+  isHiddenFolderPath,
+  MEDIA_BACKGROUND_MODES,
+  PROJECT_BACKGROUND_FOLDER,
+  PROJECT_HIDDEN_ROOT,
+} from "@/lib/project-background";

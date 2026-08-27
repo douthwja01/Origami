@@ -1,3 +1,5 @@
+import type { MediaBackgroundMode } from "@/lib/project-background";
+
 export type ProjectStatus =
   | "planned"
   | "active"
@@ -33,9 +35,11 @@ export type ProjectDTO = {
   parentId: string | null;
   githubUrl: string | null;
   websiteUrl: string | null;
-  mediaBackground: boolean;
+  mediaBackgroundMode: MediaBackgroundMode;
+  mediaBackgroundAssetId: string | null;
   mediaBackgroundCycle: boolean;
   mediaBackgroundOpacity: number;
+  thumbnailAssetId: string | null;
   createdAt: string;
   updatedAt: string;
   childCount: number;

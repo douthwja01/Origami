@@ -30,6 +30,12 @@ export const assetKind = pgEnum("asset_kind", [
   "cad",
 ]);
 
+export const mediaBackgroundMode = pgEnum("media_background_mode", [
+  "off",
+  "vault",
+  "fixed",
+]);
+
 export const projectCodeSeq = pgSequence("project_code_seq", {
   startWith: 1,
   increment: 1,
@@ -50,7 +56,13 @@ export const projects = pgTable(
     }),
     githubUrl: text("github_url"),
     websiteUrl: text("website_url"),
-    mediaBackground: boolean("media_background").notNull().default(false),
+    mediaBackgroundMode: mediaBackgroundMode("media_background_mode")
+      .notNull()
+      .default("off"),
+    mediaBackgroundAssetId: uuid("media_background_asset_id").references(
+      (): AnyPgColumn => assets.id,
+      { onDelete: "set null" },
+    ),
     mediaBackgroundCycle: boolean("media_background_cycle")
       .notNull()
       .default(false),

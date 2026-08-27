@@ -1,6 +1,7 @@
 import { json, isResponse, requireUser } from "@/lib/api";
 import {
   clampMediaBackgroundOpacity,
+  isMediaBackgroundMode,
   isMediaBackgroundOpacity,
 } from "@/lib/project-settings";
 import {
@@ -61,7 +62,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
     code?: string;
     githubUrl?: string | null;
     websiteUrl?: string | null;
-    mediaBackground?: unknown;
+    mediaBackgroundMode?: unknown;
     mediaBackgroundCycle?: unknown;
     mediaBackgroundOpacity?: unknown;
   };
@@ -94,10 +95,10 @@ export async function PATCH(request: Request, ctx: Ctx) {
   }
 
   if (
-    body.mediaBackground !== undefined &&
-    typeof body.mediaBackground !== "boolean"
+    body.mediaBackgroundMode !== undefined &&
+    !isMediaBackgroundMode(body.mediaBackgroundMode)
   ) {
-    return json({ error: "mediaBackground must be a boolean" }, 400);
+    return json({ error: "mediaBackgroundMode must be off, vault, or fixed" }, 400);
   }
   if (
     body.mediaBackgroundCycle !== undefined &&
@@ -121,10 +122,10 @@ export async function PATCH(request: Request, ctx: Ctx) {
       code: body.code,
       githubUrl,
       websiteUrl,
-      mediaBackground:
-        typeof body.mediaBackground === "boolean"
-          ? body.mediaBackground
-          : undefined,
+      mediaBackgroundMode:
+        body.mediaBackgroundMode === undefined
+          ? undefined
+          : body.mediaBackgroundMode,
       mediaBackgroundCycle:
         typeof body.mediaBackgroundCycle === "boolean"
           ? body.mediaBackgroundCycle

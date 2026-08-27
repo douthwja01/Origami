@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, unlink, rm, writeFile } from "node:fs/promises";
+import { mkdir, rename, unlink, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createReadStream, createWriteStream } from "node:fs";
 import { pipeline } from "node:stream/promises";
@@ -90,6 +90,37 @@ export async function hashFileSha256(absPath: string): Promise<string> {
     hash.update(chunk);
   }
   return hash.digest("hex");
+}
+
+export async function renameVaultFile(
+  oldStoragePath: string,
+  newFilename: string,
+): Promise<string> {
+  const safe = safeFilename(newFilename);
+  const from = absoluteFromStorage(oldStoragePath);
+  const dir = path.dirname(from);
+  const to = path.join(dir, safe);
+  const normalized = oldStoragePath.replace(/\\/g, "/");
+  const parts = normalized.split("/").filter((p) => p && p !== ".." && p !== ".");
+  parts[parts.length - 1] = safe;
+  const nextStoragePath = parts.join("/");
+
+  if (path.resolve(from) === path.resolve(to)) return nextStoragePath;
+
+  // Windows cannot always rename in place for case-only changes.
+  if (
+    process.platform === "win32" &&
+    from.toLowerCase() === to.toLowerCase()
+  ) {
+    const temp = path.join(dir, `.renaming-${Date.now()}-${safe}`);
+    await rename(from, temp);
+    await rename(temp, to);
+    return nextStoragePath;
+  }
+
+  await mkdir(dir, { recursive: true });
+  await rename(from, to);
+  return nextStoragePath;
 }
 
 export async function removeVaultFile(storagePath: string): Promise<void> {

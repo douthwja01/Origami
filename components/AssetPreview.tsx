@@ -23,20 +23,40 @@ const CadViewer = dynamic(
 export function AssetPreview({ asset }: { asset: AssetDTO }) {
   const src = `/api/assets/${asset.id}`;
   const download = `${src}?download=1`;
+  const isCad = isStlOrObj(asset.filename);
+
+  const summary = (
+    <div
+      className={`flex items-center justify-between gap-3 px-4 py-2 ${
+        isCad ? "border-t border-line" : "border-b border-line"
+      }`}
+    >
+      <div className="min-w-0">
+        <div className="truncate text-[13px]">{asset.filename}</div>
+        <div className="font-mono text-[11px] text-muted">
+          {formatBytes(asset.sizeBytes)} · {asset.mimeType}
+        </div>
+      </div>
+      <a href={download} className="shrink-0 text-[12px] text-accent">
+        Download
+      </a>
+    </div>
+  );
+
+  if (isCad) {
+    return (
+      <div className="flex h-full min-h-[320px] flex-col overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <CadViewer url={src} filename={asset.filename} />
+        </div>
+        {summary}
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full min-h-[320px] flex-col">
-      <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2">
-        <div className="min-w-0">
-          <div className="truncate text-[13px]">{asset.filename}</div>
-          <div className="font-mono text-[11px] text-muted">
-            {formatBytes(asset.sizeBytes)} · {asset.mimeType}
-          </div>
-        </div>
-        <a href={download} className="shrink-0 text-[12px] text-accent">
-          Download
-        </a>
-      </div>
+      {summary}
       <div className="min-h-0 flex-1 overflow-auto">
         {isPreviewableImage(asset.mimeType, asset.filename) ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -49,8 +69,6 @@ export function AssetPreview({ asset }: { asset: AssetDTO }) {
           </div>
         ) : isPdf(asset.mimeType, asset.filename) ? (
           <iframe title={asset.filename} src={src} className="h-[70vh] w-full border-0" />
-        ) : isStlOrObj(asset.filename) ? (
-          <CadViewer url={src} filename={asset.filename} />
         ) : isTextLike(asset.mimeType, asset.filename) ? (
           <CodeViewer url={src} filename={asset.filename} markdown={isMarkdown(asset.filename)} />
         ) : isArchive(asset.filename) ? (

@@ -7,6 +7,7 @@ import {
   MEDIA_BACKGROUND_CROSSFADE_MS,
   MEDIA_BACKGROUND_CYCLE_MS,
 } from "@/lib/project-settings-types";
+import { isHiddenFolderPath } from "@/lib/project-background";
 import type { AssetDTO, ProjectDTO } from "@/lib/types";
 
 type Props = {
@@ -21,6 +22,7 @@ type Layer = {
 };
 
 function isBackgroundMedia(asset: AssetDTO) {
+  if (isHiddenFolderPath(asset.folderPath)) return false;
   return (
     asset.kind === "media" &&
     (isPreviewableImage(asset.mimeType, asset.filename) ||
@@ -32,6 +34,13 @@ export function ProjectMediaBackground({ project, assets }: Props) {
   const [index, setIndex] = useState(0);
   const [layers, setLayers] = useState<Layer[]>([]);
   const layerSeq = useRef(0);
+
+  const fixedAsset = useMemo(() => {
+    if (project.mediaBackgroundMode !== "fixed" || !project.mediaBackgroundAssetId) {
+      return null;
+    }
+    return assets.find((asset) => asset.id === project.mediaBackgroundAssetId) ?? null;
+  }, [assets, project.mediaBackgroundAssetId, project.mediaBackgroundMode]);
 
   const media = useMemo(
     () =>
@@ -53,7 +62,8 @@ export function ProjectMediaBackground({ project, assets }: Props) {
     layerSeq.current = 0;
   }, [mediaIds]);
 
-  const cycling = Boolean(project.mediaBackgroundCycle && media.length > 1);
+  const vaultMode = project.mediaBackgroundMode === "vault";
+  const cycling = Boolean(vaultMode && project.mediaBackgroundCycle && media.length > 1);
 
   useEffect(() => {
     if (!cycling) return;
@@ -63,11 +73,16 @@ export function ProjectMediaBackground({ project, assets }: Props) {
     return () => window.clearInterval(timer);
   }, [cycling, media.length]);
 
-  const current = media.length > 0 ? media[index % media.length] : null;
+  const current =
+    project.mediaBackgroundMode === "fixed"
+      ? fixedAsset
+      : media.length > 0
+        ? media[index % media.length]
+        : null;
   const currentId = current?.id ?? null;
 
   useEffect(() => {
-    if (!current) return;
+    if (!current || project.mediaBackgroundMode === "fixed") return;
 
     let fadeFrame = 0;
     let pruneTimer = 0;
@@ -107,12 +122,23 @@ export function ProjectMediaBackground({ project, assets }: Props) {
       window.cancelAnimationFrame(fadeFrame);
       window.clearTimeout(pruneTimer);
     };
-  }, [current, currentId]);
+  }, [current, currentId, project.mediaBackgroundMode]);
 
-  if (!project.mediaBackground || media.length === 0 || !current) return null;
+  if (project.mediaBackgroundMode === "off" || !current) return null;
 
   const opacity =
     (project.mediaBackgroundOpacity ?? DEFAULT_MEDIA_BACKGROUND_OPACITY) / 100;
+
+  if (project.mediaBackgroundMode === "fixed") {
+    return (
+      <div
+        className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
+        aria-hidden="true"
+      >
+        <MediaSlide asset={current} opacity={opacity} crossfade={false} />
+      </div>
+    );
+  }
 
   const shown =
     layers.length > 0
@@ -129,18 +155,29 @@ export function ProjectMediaBackground({ project, assets }: Props) {
           key={layer.key}
           asset={layer.asset}
           opacity={layer.visible ? opacity : 0}
+          crossfade
         />
       ))}
     </div>
   );
 }
 
-function MediaSlide({ asset, opacity }: { asset: AssetDTO; opacity: number }) {
+function MediaSlide({
+  asset,
+  opacity,
+  crossfade,
+}: {
+  asset: AssetDTO;
+  opacity: number;
+  crossfade: boolean;
+}) {
   const src = `/api/assets/${asset.id}`;
   const className = "absolute inset-0 h-full w-full object-cover";
   const style = {
     opacity,
-    transition: `opacity ${MEDIA_BACKGROUND_CROSSFADE_MS}ms ease-in-out`,
+    transition: crossfade
+      ? `opacity ${MEDIA_BACKGROUND_CROSSFADE_MS}ms ease-in-out`
+      : undefined,
   };
 
   if (isPreviewableVideo(asset.mimeType, asset.filename)) {

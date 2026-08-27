@@ -18,7 +18,12 @@ export {
   MEDIA_BACKGROUND_OPACITY_MIN,
   VAULT_NAME_MAX,
   clampMediaBackgroundOpacity,
+  isMediaBackgroundMode,
   isMediaBackgroundOpacity,
+  isHiddenFolderPath,
+  MEDIA_BACKGROUND_MODES,
+  PROJECT_BACKGROUND_FOLDER,
+  PROJECT_HIDDEN_ROOT,
   parseVaultName,
 } from "@/lib/project-settings-types";
 

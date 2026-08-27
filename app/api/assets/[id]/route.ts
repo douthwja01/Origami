@@ -46,15 +46,19 @@ export async function PATCH(request: Request, ctx: Ctx) {
   if (isResponse(user)) return user;
   const { id } = await ctx.params;
 
-  let body: { kind?: string; folderPath?: string };
+  let body: { kind?: string; folderPath?: string; filename?: string };
   try {
     body = await request.json();
   } catch {
     return json({ error: "Invalid JSON" }, 400);
   }
 
-  if (body.kind === undefined && body.folderPath === undefined) {
-    return json({ error: "kind or folderPath is required" }, 400);
+  if (
+    body.kind === undefined &&
+    body.folderPath === undefined &&
+    body.filename === undefined
+  ) {
+    return json({ error: "kind, folderPath, or filename is required" }, 400);
   }
   if (body.kind !== undefined && !isKind(body.kind)) {
     return json({ error: "Invalid kind" }, 400);
@@ -64,6 +68,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
     const asset = await updateAsset(id, {
       kind: body.kind,
       folderPath: body.folderPath,
+      filename: body.filename,
     });
     return json({ asset });
   } catch (error) {

@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { json, isResponse, requireUser } from "@/lib/api";
+import { normalizeFolderPath } from "@/lib/folder-path";
 import { inferKind } from "@/lib/kinds";
+import { isHiddenFolderPath } from "@/lib/project-background";
 import { getProjectRow, insertAsset } from "@/lib/projects";
+import { formatBytes } from "@/lib/format";
 import { resolveMaxUploadBytes } from "@/lib/upload-settings";
 import { removeVaultFile, writeVaultFile } from "@/lib/vault";
 
@@ -32,7 +35,9 @@ export async function POST(request: Request, ctx: Ctx) {
   const limit = await resolveMaxUploadBytes();
   if (file.size > limit) {
     return json(
-      { error: `File exceeds the ${Math.round(limit / 1024 / 1024)} MB upload limit` },
+      {
+        error: `${formatBytes(file.size)} exceeds the ${formatBytes(limit)} per-file limit`,
+      },
       413,
     );
   }
@@ -42,6 +47,13 @@ export async function POST(request: Request, ctx: Ctx) {
   const folderField = form.get("folderPath");
   const folderPath =
     typeof folderField === "string" ? folderField : "";
+  const normalizedFolder = normalizeFolderPath(folderPath);
+  if (normalizedFolder === null) {
+    return json({ error: "Invalid folder path" }, 400);
+  }
+  if (isHiddenFolderPath(normalizedFolder)) {
+    return json({ error: "That folder is reserved" }, 403);
+  }
 
   const assetId = randomUUID();
   const filename = file.name || "file";
@@ -56,9 +68,10 @@ export async function POST(request: Request, ctx: Ctx) {
     );
     const sizeBytes = written.bytes || file.size;
     const asset = await insertAsset({
+      id: assetId,
       projectId,
       kind,
-      folderPath,
+      folderPath: normalizedFolder,
       filename,
       mimeType,
       sizeBytes,

@@ -4,12 +4,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AssetPreview } from "@/components/AssetPreview";
 import { TagChips, TagContextMenu } from "@/components/TagMenu";
+import { ToastStack, type Toast } from "@/components/ToastStack";
 import { formatBytes, kindLabel, statusLabel } from "@/lib/format";
 import {
   directChildFolderName,
   isUnderFolderPath,
   joinFolderPath,
 } from "@/lib/folder-path";
+import { isHiddenFolderPath } from "@/lib/project-background";
 import { uploadsFromDataTransfer } from "@/lib/drop-upload";
 import { mimeFromFilename } from "@/lib/kinds";
 import {
@@ -38,6 +40,15 @@ type MenuState = {
   x: number;
   y: number;
   target: { type: "file"; id: string } | { type: "folder"; path: string };
+};
+
+type UploadBatchItem = { file: File; folderPath: string };
+
+type UploadBatchResult = {
+  succeeded: string[];
+  skipped: { name: string; reason: string }[];
+  failed: { name: string; error: string } | null;
+  last: AssetDTO | null;
 };
 
 type Props = {
@@ -75,6 +86,11 @@ export function FileBrowser({
   const [busy, setBusy] = useState(false);
   const [creatingFile, setCreatingFile] = useState(false);
   const [creatingFolder, setCreatingFolder] = useState(false);
+  const [renaming, setRenaming] = useState<
+    | { type: "file"; asset: AssetDTO }
+    | { type: "folder"; path: string }
+    | null
+  >(null);
   const [newName, setNewName] = useState("");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortMode>("name");
@@ -85,24 +101,93 @@ export function FileBrowser({
     | { type: "folder"; path: string }
     | null
   >(null);
+  const [maxUploadBytes, setMaxUploadBytes] = useState<number | null>(null);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  function pushToast(toast: Omit<Toast, "id">) {
+    setToasts((prev) => [...prev, { ...toast, id: crypto.randomUUID() }]);
+  }
+
+  function dismissToast(id: string) {
+    setToasts((prev) => prev.filter((item) => item.id !== id));
+  }
+
+  function listPreview(names: string[], max = 6): string[] {
+    if (names.length <= max) return names;
+    return [...names.slice(0, max), `+${names.length - max} more`];
+  }
+
+  function notifyUploadResult(result: UploadBatchResult) {
+    const { succeeded, skipped, failed } = result;
+    if (succeeded.length > 0) {
+      pushToast({
+        kind: "success",
+        title:
+          succeeded.length === 1
+            ? `Uploaded ${succeeded[0]}`
+            : `Uploaded ${succeeded.length} files`,
+        items: succeeded.length > 1 ? listPreview(succeeded) : undefined,
+      });
+    }
+    if (skipped.length > 0) {
+      pushToast({
+        kind: "warning",
+        title:
+          skipped.length === 1 ? "Skipped 1 file" : `Skipped ${skipped.length} files`,
+        items: listPreview(
+          skipped.map((item) => `${item.name} — ${item.reason}`),
+        ),
+      });
+    }
+    if (failed) {
+      pushToast({
+        kind: "error",
+        title: `Failed: ${failed.name}`,
+        items: [failed.error],
+      });
+      setError(failed.error);
+    }
+  }
 
   useEffect(() => {
-    if (!creatingFile && !creatingFolder && !pendingDelete) return;
+    void fetch("/api/settings/system")
+      .then((res) => res.json())
+      .then((data) => {
+        const mb = data.settings?.maxUploadMb;
+        if (typeof mb === "number" && mb > 0) {
+          setMaxUploadBytes(mb * 1024 * 1024);
+        }
+      })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!creatingFile && !creatingFolder && !renaming && !pendingDelete) return;
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setCreatingFile(false);
         setCreatingFolder(false);
+        setRenaming(null);
         setPendingDelete(null);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [creatingFile, creatingFolder, pendingDelete]);
+  }, [creatingFile, creatingFolder, renaming, pendingDelete]);
+
+  const visibleAssets = useMemo(
+    () => assets.filter((asset) => !isHiddenFolderPath(asset.folderPath)),
+    [assets],
+  );
+  const visibleFolders = useMemo(
+    () => folders.filter((folder) => !isHiddenFolderPath(folder.path)),
+    [folders],
+  );
 
   const folderPaths = useMemo(() => {
     const set = new Set<string>();
-    for (const folder of folders) set.add(folder.path);
-    for (const asset of assets) {
+    for (const folder of visibleFolders) set.add(folder.path);
+    for (const asset of visibleAssets) {
       if (!asset.folderPath) continue;
       const parts = asset.folderPath.split("/");
       let built = "";
@@ -112,20 +197,20 @@ export function FileBrowser({
       }
     }
     return set;
-  }, [assets, folders]);
+  }, [visibleAssets, visibleFolders]);
 
   const folderTagsOf = useMemo(() => {
     const map = new Map<string, TagDTO[]>();
-    for (const folder of folders) map.set(folder.path, folder.tags);
+    for (const folder of visibleFolders) map.set(folder.path, folder.tags);
     return map;
-  }, [folders]);
+  }, [visibleFolders]);
 
   function tagsForFolder(folderPath: string): TagDTO[] {
     return folderTagsOf.get(folderPath) ?? [];
   }
 
   function folderHasKind(folderPath: string, kind: AssetKind): boolean {
-    return assets.some(
+    return visibleAssets.some(
       (asset) =>
         asset.kind === kind &&
         (asset.folderPath === folderPath ||
@@ -148,17 +233,17 @@ export function FileBrowser({
       names.add(child);
     }
     return [...names].sort((a, b) => a.localeCompare(b));
-  }, [assets, filterKind, folderPaths, path]);
+  }, [visibleAssets, filterKind, folderPaths, path]);
 
   const childFiles = useMemo(() => {
-    return assets
+    return visibleAssets
       .filter(
         (asset) =>
           asset.folderPath === path &&
           (!filterKind || asset.kind === filterKind),
       )
       .sort((a, b) => a.filename.localeCompare(b.filename));
-  }, [assets, filterKind, path]);
+  }, [visibleAssets, filterKind, path]);
 
   const listedFolders = useMemo(() => {
     type Entry = {
@@ -187,7 +272,7 @@ export function FileBrowser({
         continue;
       }
       const createdAt =
-        folders.find((folder) => folder.path === folderPath)?.createdAt ?? "";
+        visibleFolders.find((folder) => folder.path === folderPath)?.createdAt ?? "";
       entries.push({ path: folderPath, name, tags, createdAt });
     }
     entries.sort((a, b) => {
@@ -202,12 +287,12 @@ export function FileBrowser({
     });
     return entries;
   }, [
-    assets,
+    visibleAssets,
     filterKind,
     filtering,
     folderPaths,
     folderTagsOf,
-    folders,
+    visibleFolders,
     path,
     query,
     sort,
@@ -215,7 +300,7 @@ export function FileBrowser({
   ]);
 
   const listedFiles = useMemo(() => {
-    const pool = assets.filter((asset) => {
+    const pool = visibleAssets.filter((asset) => {
       if (filterKind && asset.kind !== filterKind) return false;
       if (filtering) {
         return asset.folderPath === path || isUnderFolderPath(asset.folderPath, path);
@@ -235,12 +320,12 @@ export function FileBrowser({
       }
       return a.filename.localeCompare(b.filename);
     });
-  }, [assets, filterKind, filtering, path, query, sort, tagFilter]);
+  }, [visibleAssets, filterKind, filtering, path, query, sort, tagFilter]);
 
   const selectedFile = useMemo(() => {
     if (selection?.type !== "file") return null;
-    return assets.find((asset) => asset.id === selection.id) ?? null;
-  }, [assets, selection]);
+    return visibleAssets.find((asset) => asset.id === selection.id) ?? null;
+  }, [visibleAssets, selection]);
 
   const selectedFolder = useMemo(() => {
     if (selection?.type !== "folder") return null;
@@ -255,10 +340,10 @@ export function FileBrowser({
     if (!menu) return [] as TagDTO[];
     const target = menu.target;
     if (target.type === "file") {
-      return assets.find((asset) => asset.id === target.id)?.tags ?? [];
+      return visibleAssets.find((asset) => asset.id === target.id)?.tags ?? [];
     }
     return tagsForFolder(target.path);
-  }, [assets, folderTagsOf, menu]);
+  }, [visibleAssets, folderTagsOf, menu]);
 
   const deleteEnabled =
     selection?.type === "file" || selection?.type === "folder";
@@ -319,33 +404,80 @@ export function FileBrowser({
     setTagFilter(tag.key);
   }
 
-  async function uploadFiles(files: FileList | File[], folderPath: string) {
-    setError(null);
+  async function postFile(file: File, folderPath: string) {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("folderPath", folderPath);
+    const res = await fetch(`/api/projects/${projectId}/assets`, {
+      method: "POST",
+      body: form,
+    });
+    const data = await res.json();
+    return { res, data, asset: data.asset as AssetDTO | undefined };
+  }
+
+  function perFileLimitMessage(file: File): string | null {
+    if (maxUploadBytes == null || file.size <= maxUploadBytes) return null;
+    return `${formatBytes(file.size)} (limit ${formatBytes(maxUploadBytes)})`;
+  }
+
+  async function runUploadBatch(
+    items: UploadBatchItem[],
+  ): Promise<UploadBatchResult> {
+    const succeeded: string[] = [];
+    const skipped: { name: string; reason: string }[] = [];
+    let failed: { name: string; error: string } | null = null;
     let last: AssetDTO | null = null;
-    const list = Array.from(files);
-    for (let i = 0; i < list.length; i += 1) {
-      const file = list[i];
+
+    for (let i = 0; i < items.length; i += 1) {
+      const { file, folderPath } = items[i];
+      const skipReason = perFileLimitMessage(file);
+      if (skipReason) {
+        skipped.push({ name: file.name, reason: skipReason });
+        continue;
+      }
       setUploading(
-        list.length > 1 ? `${i + 1}/${list.length} ${file.name}` : file.name,
+        items.length > 1
+          ? `${i + 1}/${items.length} ${file.name}`
+          : file.name,
       );
-      const form = new FormData();
-      form.append("file", file);
-      form.append("folderPath", folderPath);
-      const res = await fetch(`/api/projects/${projectId}/assets`, {
-        method: "POST",
-        body: form,
-      });
-      const data = await res.json();
+      const { res, data, asset } = await postFile(file, folderPath);
       if (!res.ok) {
-        setError(data.error || `Failed to upload ${file.name}`);
+        if (res.status === 413) {
+          skipped.push({
+            name: file.name,
+            reason:
+              data.error ||
+              `${formatBytes(file.size)} (limit ${
+                maxUploadBytes != null
+                  ? formatBytes(maxUploadBytes)
+                  : "unknown"
+              })`,
+          });
+          continue;
+        }
+        failed = {
+          name: file.name,
+          error: data.error || "Upload failed",
+        };
         break;
       }
-      last = data.asset;
+      succeeded.push(file.name);
+      if (asset) last = asset;
     }
     setUploading(null);
-    if (last) setSelection({ type: "file", id: last.id });
+    return { succeeded, skipped, failed, last };
+  }
+
+  async function uploadFiles(files: FileList | File[], folderPath: string) {
+    setError(null);
+    const result = await runUploadBatch(
+      Array.from(files).map((file) => ({ file, folderPath })),
+    );
+    notifyUploadResult(result);
+    if (result.last) setSelection({ type: "file", id: result.last.id });
     await onChanged();
-    return last;
+    return result.last;
   }
 
   async function ensureFolderPath(folderPath: string) {
@@ -397,28 +529,9 @@ export function FileBrowser({
     }
 
     let last: AssetDTO | null = null;
-    for (let i = 0; i < uploads.length; i += 1) {
-      const item = uploads[i];
-      setUploading(
-        uploads.length > 1
-          ? `${i + 1}/${uploads.length} ${item.file.name}`
-          : item.file.name,
-      );
-      const form = new FormData();
-      form.append("file", item.file);
-      form.append("folderPath", item.folderPath);
-      const res = await fetch(`/api/projects/${projectId}/assets`, {
-        method: "POST",
-        body: form,
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || `Failed to upload ${item.file.name}`);
-        break;
-      }
-      last = data.asset;
-    }
-    setUploading(null);
+    const result = await runUploadBatch(uploads);
+    notifyUploadResult(result);
+    last = result.last;
     if (last) setSelection({ type: "file", id: last.id });
     else if (neededFolders.length > 0) {
       setSelection({
@@ -430,7 +543,7 @@ export function FileBrowser({
   }
 
   async function moveAsset(assetId: string, folderPath: string) {
-    const asset = assets.find((item) => item.id === assetId);
+    const asset = visibleAssets.find((item) => item.id === assetId);
     if (!asset || asset.folderPath === folderPath) return;
     setError(null);
     const res = await fetch(`/api/assets/${assetId}`, {
@@ -487,6 +600,86 @@ export function FileBrowser({
     await onChanged();
   }
 
+  async function renameFile() {
+    if (!renaming || renaming.type !== "file") return;
+    const filename = newName.trim();
+    if (!filename || /[\\/]/.test(filename)) {
+      setError("Enter a file name without path separators");
+      return;
+    }
+    if (filename === renaming.asset.filename) {
+      setRenaming(null);
+      setNewName("");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const res = await fetch(`/api/assets/${renaming.asset.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) {
+      setError(data.error || "Could not rename file");
+      return;
+    }
+    const assetId = renaming.asset.id;
+    setRenaming(null);
+    setNewName("");
+    setSelection({ type: "file", id: assetId });
+    await onChanged();
+  }
+
+  function rewriteLocalPath(current: string, from: string, to: string) {
+    if (current === from) return to;
+    if (isUnderFolderPath(current, from)) return `${to}${current.slice(from.length)}`;
+    return current;
+  }
+
+  async function renameFolderItem() {
+    if (!renaming || renaming.type !== "folder") return;
+    const name = newName.trim();
+    if (!name) {
+      setError("Enter a valid folder name");
+      return;
+    }
+    const currentName = renaming.path.split("/").pop() ?? renaming.path;
+    if (name === currentName) {
+      setRenaming(null);
+      setNewName("");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const res = await fetch(`/api/projects/${projectId}/folders`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: renaming.path, name }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) {
+      setError(data.error || "Could not rename folder");
+      return;
+    }
+    const nextPath =
+      typeof data.folder?.path === "string" ? data.folder.path : renaming.path;
+    const from = renaming.path;
+    setRenaming(null);
+    setNewName("");
+    setPath((current) => rewriteLocalPath(current, from, nextPath));
+    setSelection((current) => {
+      if (current?.type !== "folder") return current;
+      return {
+        type: "folder",
+        path: rewriteLocalPath(current.path, from, nextPath),
+      };
+    });
+    await onChanged();
+  }
+
   async function removeSelection() {
     if (!pendingDelete) return;
     setBusy(true);
@@ -531,7 +724,7 @@ export function FileBrowser({
     const assetId =
       event.dataTransfer.getData(ASSET_DRAG) ||
       event.dataTransfer.getData("text/plain");
-    if (assetId && assets.some((asset) => asset.id === assetId)) {
+    if (assetId && visibleAssets.some((asset) => asset.id === assetId)) {
       void moveAsset(assetId, folderPath);
       return;
     }
@@ -629,7 +822,7 @@ export function FileBrowser({
           disabled={!deleteEnabled}
           onClick={() => {
             if (selection?.type === "file") {
-              const asset = assets.find((item) => item.id === selection.id);
+              const asset = visibleAssets.find((item) => item.id === selection.id);
               if (asset) setPendingDelete({ type: "file", asset });
             } else if (selection?.type === "folder") {
               setPendingDelete({ type: "folder", path: selection.path });
@@ -869,23 +1062,23 @@ export function FileBrowser({
           </div>
         </div>
 
-        <div className="min-h-[280px] min-w-0 overflow-auto">
+        <div className="flex min-h-[280px] min-w-0 flex-col overflow-hidden lg:min-h-0">
           {selectedFile ? (
-            <div className="flex h-full min-h-0 flex-col">
+            <div className="flex h-full min-h-0 flex-col overflow-hidden">
               {selectedFile.tags.length > 0 ? (
-                <div className="border-b border-line px-4 py-2">
+                <div className="shrink-0 border-b border-line px-4 py-2">
                   <TagChips
                     tags={selectedFile.tags}
                     onTagClick={applyTagFilter}
                   />
                 </div>
               ) : null}
-              <div className="min-h-0 flex-1 overflow-auto">
+              <div className="min-h-0 flex-1 overflow-hidden">
                 <AssetPreview asset={selectedFile} />
               </div>
             </div>
           ) : selection?.type === "folder" ? (
-            <div className="p-4">
+            <div className="overflow-auto p-4">
               <h2 className="text-[13px] font-medium">{selectedFolder?.name}</h2>
               <p className="mt-1 text-[13px] text-muted">
                 Double-click to open, right-click to tag, or delete to remove it.
@@ -900,7 +1093,7 @@ export function FileBrowser({
               ) : null}
             </div>
           ) : selection?.type === "projects" ? (
-            <div className="p-4">
+            <div className="overflow-auto p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <h2 className="text-[13px] font-medium">Child projects</h2>
                 <button
@@ -953,6 +1146,7 @@ export function FileBrowser({
           value={newName}
           placeholder={placeholderFor(filterKind)}
           busy={busy}
+          submitLabel="Create"
           onChange={setNewName}
           onCancel={() => setCreatingFile(false)}
           onSubmit={() => void createFile()}
@@ -966,9 +1160,37 @@ export function FileBrowser({
           value={newName}
           placeholder="folder-name"
           busy={busy}
+          submitLabel="Create"
           onChange={setNewName}
           onCancel={() => setCreatingFolder(false)}
           onSubmit={() => void createFolder()}
+        />
+      ) : null}
+
+      {renaming ? (
+        <NameDialog
+          title={renaming.type === "file" ? "Rename file" : "Rename folder"}
+          hint={
+            renaming.type === "file"
+              ? "Updates the file name in the vault. Changing the extension may change its type."
+              : "Renames this folder and updates paths for everything inside it."
+          }
+          value={newName}
+          placeholder={
+            renaming.type === "file"
+              ? renaming.asset.filename
+              : (renaming.path.split("/").pop() ?? renaming.path)
+          }
+          busy={busy}
+          submitLabel="Rename"
+          onChange={setNewName}
+          onCancel={() => {
+            setRenaming(null);
+            setNewName("");
+          }}
+          onSubmit={() =>
+            void (renaming.type === "file" ? renameFile() : renameFolderItem())
+          }
         />
       ) : null}
 
@@ -990,6 +1212,20 @@ export function FileBrowser({
                 }
               : undefined
           }
+          onRename={() => {
+            const target = menu.target;
+            setError(null);
+            if (target.type === "file") {
+              const asset = visibleAssets.find((item) => item.id === target.id);
+              if (!asset) return;
+              setNewName(asset.filename);
+              setRenaming({ type: "file", asset });
+              return;
+            }
+            const name = target.path.split("/").pop() ?? target.path;
+            setNewName(name);
+            setRenaming({ type: "folder", path: target.path });
+          }}
           onNewFolder={() => {
             const target = menu.target;
             if (target.type === "folder") {
@@ -1003,7 +1239,7 @@ export function FileBrowser({
           onDelete={() => {
             const target = menu.target;
             if (target.type === "file") {
-              const asset = assets.find((item) => item.id === target.id);
+              const asset = visibleAssets.find((item) => item.id === target.id);
               if (asset) setPendingDelete({ type: "file", asset });
               return;
             }
@@ -1043,6 +1279,7 @@ export function FileBrowser({
           </div>
         </div>
       ) : null}
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }
@@ -1053,6 +1290,7 @@ function NameDialog({
   value,
   placeholder,
   busy,
+  submitLabel = "Create",
   onChange,
   onCancel,
   onSubmit,
@@ -1062,6 +1300,7 @@ function NameDialog({
   value: string;
   placeholder: string;
   busy: boolean;
+  submitLabel?: string;
   onChange: (value: string) => void;
   onCancel: () => void;
   onSubmit: () => void;
@@ -1081,6 +1320,7 @@ function NameDialog({
           autoFocus
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          onFocus={(event) => event.target.select()}
           placeholder={placeholder}
           className="mt-4 w-full rounded-md border border-line bg-canvas px-3 py-2 text-[13px] outline-none focus:border-accent"
         />
@@ -1097,7 +1337,7 @@ function NameDialog({
             disabled={busy || !value.trim()}
             className="rounded-md bg-accent px-3 py-2 text-[13px] text-canvas disabled:opacity-50"
           >
-            Create
+            {submitLabel}
           </button>
         </div>
       </form>

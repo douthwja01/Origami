@@ -10,6 +10,7 @@ import { VaultExplorer } from "@/components/VaultExplorer";
 import { useProjects } from "@/components/ProjectsContext";
 import { useProjectDisplay } from "@/components/ProjectDisplayContext";
 import { formatDate, statusLabel } from "@/lib/format";
+import { PROJECT_BACKGROUND_FOLDER } from "@/lib/project-background";
 import type { ProjectDetail } from "@/lib/types";
 
 export function ProjectWorkspace({ id }: { id: string }) {
@@ -41,6 +42,12 @@ export function ProjectWorkspace({ id }: { id: string }) {
   }, [load]);
 
   const project = data?.project;
+  const backgroundAsset =
+    data?.assets.find(
+      (asset) =>
+        asset.folderPath === PROJECT_BACKGROUND_FOLDER &&
+        asset.id === project?.mediaBackgroundAssetId,
+    ) ?? null;
   const parent = data?.ancestors.at(-1);
   const backHref = parent ? `/projects/${parent.id}` : "/";
   const backLabel = parent ? parent.code : settings.vaultName;
@@ -191,6 +198,7 @@ export function ProjectWorkspace({ id }: { id: string }) {
               {settingsOpen ? (
                 <ProjectPageSettings
                   project={project}
+                  backgroundAsset={backgroundAsset}
                   onSaved={async () => {
                     await Promise.all([load(), refresh()]);
                   }}

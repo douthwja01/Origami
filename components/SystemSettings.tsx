@@ -71,8 +71,9 @@ export function SystemSettings({ initialSettings }: Props) {
       <section className="flex flex-col rounded-xl border border-line bg-raised p-4">
         <h2 className="text-[13px] font-medium">Uploads</h2>
         <p className="mt-1 text-[13px] text-muted">
-          Maximum size for a single file uploaded to the vault. Applies
-          immediately to new uploads.
+          Maximum size for each individual file uploaded to the vault. When you
+          drop a folder or select many files, every file is checked separately;
+          oversized files are skipped and the rest still upload.
         </p>
         <label className="mt-4 block">
           <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted">
