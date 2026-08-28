@@ -148,6 +148,13 @@
       "when": 1787756200000,
       "tag": "0020_users_teams",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1787900800000,
+      "tag": "0021_vault_project_folders",
+      "breakpoints": true
     }
   ]
 }

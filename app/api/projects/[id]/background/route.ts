@@ -55,13 +55,15 @@ export async function POST(request: Request, ctx: Ctx) {
 
   const assetId = randomUUID();
 
+  let written: { storagePath: string; bytes: number; sha256: string } | null =
+    null;
   try {
     await ensureProjectFolder(projectId, PROJECT_BACKGROUND_FOLDER);
     await clearBackgroundFolderAssets(projectId);
 
-    const written = await writeVaultFile(
+    written = await writeVaultFile(
       projectId,
-      assetId,
+      PROJECT_BACKGROUND_FOLDER,
       filename,
       file.stream(),
     );
@@ -85,9 +87,9 @@ export async function POST(request: Request, ctx: Ctx) {
 
     return json({ project: updated, asset }, 201);
   } catch (error) {
-    await removeVaultFile(`${projectId}/${assetId}/${filename}`).catch(
-      () => undefined,
-    );
+    if (written) {
+      await removeVaultFile(written.storagePath).catch(() => undefined);
+    }
     const statusCode = (error as { status?: number }).status ?? 500;
     return json({ error: (error as Error).message || "Upload failed" }, statusCode);
   }

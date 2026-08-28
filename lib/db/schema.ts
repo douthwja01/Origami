@@ -205,6 +205,11 @@ export const assets = pgTable(
   (table) => [
     index("assets_project_id_idx").on(table.projectId),
     index("assets_project_folder_idx").on(table.projectId, table.folderPath),
+    unique("assets_project_folder_filename_unique").on(
+      table.projectId,
+      table.folderPath,
+      table.filename,
+    ),
   ],
 );
 

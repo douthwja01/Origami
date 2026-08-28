@@ -18,6 +18,11 @@ export async function GET() {
   const user = await requireUser();
   if (isResponse(user)) return user;
 
+  const { scanBackups } = await import("@/lib/backups/scan");
+  await scanBackups({ immediate: true }).catch((error) => {
+    console.error("[origami] backup scan failed", error);
+  });
+
   const [settings, stats, runs] = await Promise.all([
     getBackupSettings(),
     backupStats(),

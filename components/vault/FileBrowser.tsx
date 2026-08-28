@@ -516,16 +516,18 @@ export function FileBrowser({
       );
       const { res, data, asset } = await postFile(file, folderPath);
       if (!res.ok) {
-        if (res.status === 413) {
+        if (res.status === 413 || res.status === 409) {
           skipped.push({
             name: file.name,
             reason:
               data.error ||
-              `${formatBytes(file.size)} (limit ${
-                maxUploadBytes != null
-                  ? formatBytes(maxUploadBytes)
-                  : "unknown"
-              })`,
+              (res.status === 409
+                ? "A file with that name already exists here"
+                : `${formatBytes(file.size)} (limit ${
+                    maxUploadBytes != null
+                      ? formatBytes(maxUploadBytes)
+                      : "unknown"
+                  })`),
           });
           continue;
         }

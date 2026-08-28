@@ -4,7 +4,10 @@ import { requireAccessibleProject } from "@/lib/auth/access";
 import { normalizeFolderPath } from "@/lib/vault/folder-path";
 import { inferKind } from "@/lib/vault/kinds";
 import { isHiddenFolderPath } from "@/lib/projects/project-background";
-import { insertAsset } from "@/lib/projects/projects";
+import {
+  assertAssetNameAvailable,
+  insertAsset,
+} from "@/lib/projects/projects";
 import { formatBytes } from "@/lib/shared/format";
 import { logOrigami } from "@/lib/settings/log";
 import { resolveMaxUploadBytes } from "@/lib/settings/upload-settings";
@@ -61,10 +64,13 @@ export async function POST(request: Request, ctx: Ctx) {
   const filename = file.name || "file";
   const mimeType = file.type || "application/octet-stream";
 
+  let written: { storagePath: string; bytes: number; sha256: string } | null =
+    null;
   try {
-    const written = await writeVaultFile(
+    await assertAssetNameAvailable(projectId, normalizedFolder, filename);
+    written = await writeVaultFile(
       projectId,
-      assetId,
+      normalizedFolder,
       filename,
       file.stream(),
     );
@@ -89,9 +95,10 @@ export async function POST(request: Request, ctx: Ctx) {
     );
     return json({ asset }, 201);
   } catch (error) {
-    await removeVaultFile(`${projectId}/${assetId}/${filename}`).catch(
-      () => undefined,
-    );
-    return json({ error: (error as Error).message || "Upload failed" }, 500);
+    if (written) {
+      await removeVaultFile(written.storagePath).catch(() => undefined);
+    }
+    const statusCode = (error as { status?: number }).status ?? 500;
+    return json({ error: (error as Error).message || "Upload failed" }, statusCode);
   }
 }

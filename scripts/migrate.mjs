@@ -118,6 +118,14 @@ export async function runMigrations() {
     );
   }
 
+  const assetsTable = await client.query(`
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'assets'
+  `);
+  if (assetsTable.rowCount) {
+    await disambiguateAssetFilenames(client);
+  }
+
   const db = drizzle(client);
   await migrate(db, {
     migrationsFolder: path.join(__dirname, "..", "drizzle"),
@@ -187,6 +195,106 @@ export async function runMigrations() {
 
   await client.end();
   console.log("Migrations complete");
+}
+
+function uniquifyFilename(filename, used) {
+  if (!used.has(filename)) return filename;
+  const dot = filename.lastIndexOf(".");
+  const stem = dot > 0 ? filename.slice(0, dot) : filename;
+  const ext = dot > 0 ? filename.slice(dot) : "";
+  let n = 2;
+  let candidate = `${stem}-${n}${ext}`;
+  while (used.has(candidate)) {
+    n += 1;
+    candidate = `${stem}-${n}${ext}`;
+  }
+  return candidate;
+}
+
+function folderKey(projectId, folderPath) {
+  return `${projectId}\0${folderPath}`;
+}
+
+function parentFolderName(fullPath) {
+  const slash = fullPath.lastIndexOf("/");
+  if (slash === -1) return { parent: "", name: fullPath };
+  return {
+    parent: fullPath.slice(0, slash),
+    name: fullPath.slice(slash + 1),
+  };
+}
+
+/** Rename colliding files in the same project folder before the unique constraint. */
+async function disambiguateAssetFilenames(client) {
+  const unique = await client.query(`
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'assets_project_folder_filename_unique'
+  `);
+  if (unique.rowCount) return;
+
+  const foldersTable = await client.query(`
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'project_folders'
+  `);
+  const folderRows = foldersTable.rowCount
+    ? await client.query(`SELECT project_id, path FROM project_folders`)
+    : { rows: [] };
+
+  const folderCol = await client.query(`
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'assets' AND column_name = 'folder_path'
+  `);
+  const assetRows = folderCol.rowCount
+    ? await client.query(`
+        SELECT id, project_id, folder_path, filename
+        FROM assets
+        ORDER BY created_at, id
+      `)
+    : await client.query(`
+        SELECT id, project_id, '' AS folder_path, filename
+        FROM assets
+        ORDER BY created_at, id
+      `);
+
+  const used = new Map();
+  for (const row of folderRows.rows) {
+    const { parent, name } = parentFolderName(row.path);
+    const key = folderKey(row.project_id, parent);
+    if (!used.has(key)) used.set(key, new Set());
+    used.get(key).add(name);
+  }
+
+  const claimed = new Set();
+  for (const row of assetRows.rows) {
+    const key = folderKey(row.project_id, row.folder_path);
+    if (!used.has(key)) used.set(key, new Set());
+    const names = used.get(key);
+    if (names.has(row.filename)) continue;
+    names.add(row.filename);
+    claimed.add(row.id);
+  }
+
+  const renames = [];
+  for (const row of assetRows.rows) {
+    if (claimed.has(row.id)) continue;
+    const key = folderKey(row.project_id, row.folder_path);
+    const names = used.get(key);
+    const next = uniquifyFilename(row.filename, names);
+    names.add(next);
+    renames.push({ id: row.id, filename: next });
+  }
+
+  for (const row of renames) {
+    await client.query(`UPDATE assets SET filename = $1 WHERE id = $2`, [
+      row.filename,
+      row.id,
+    ]);
+  }
+  if (renames.length > 0) {
+    console.log(
+      `Disambiguated ${renames.length} duplicate vault filename(s)`,
+    );
+  }
 }
 
 const isDirect =

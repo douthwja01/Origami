@@ -70,7 +70,7 @@ function joinBackup(...parts: string[]): string {
   return path.join(process.cwd(), "data", "backups", ...parts);
 }
 
-function resolveBackupPath(storagePath: string): string {
+export function resolveBackupPath(storagePath: string): string {
   const parts = storagePath.split(/[/\\]/).filter((part) => part && part !== "." && part !== "..");
   if (parts.length === 0) {
     throw new Error("Invalid backup path");
@@ -497,6 +497,12 @@ export async function backupArchivedProject(
 ): Promise<void> {
   logBackup("info", `archive backup started (${project.code})`);
   try {
+    const { runStorageReconcile } = await import("@/lib/vault/scan-scheduler");
+    await runStorageReconcile({ immediate: true });
+  } catch (error) {
+    logBackup("error", "backup scan failed", error);
+  }
+  try {
     await backupProject(project, { force: true });
     logBackup("info", `archive backup finished (${project.code})`);
   } catch (error) {
@@ -512,6 +518,13 @@ export async function backupArchivedProject(
 export async function runBackupPass(): Promise<BackupPassResult> {
   logBackup("info", "backup pass started");
   try {
+    try {
+      const { runStorageReconcile } = await import("@/lib/vault/scan-scheduler");
+      await runStorageReconcile({ immediate: true });
+    } catch (error) {
+      logBackup("error", "backup scan failed", error);
+    }
+
     const db = getDb();
     const settings = await getBackupSettings();
     const rows = await db.select().from(projects);

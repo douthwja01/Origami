@@ -1,4 +1,5 @@
 import { backupRoot, backupStats, getBackupSettings, listProjectBackups } from "@/lib/backups/backup";
+import { scanBackups } from "@/lib/backups/scan";
 import { formatBytes } from "@/lib/shared/format";
 import { SETTINGS_NAV } from "@/lib/settings/nav";
 import { BackupSettings } from "@/components/settings/BackupSettings";
@@ -8,6 +9,9 @@ export const dynamic = "force-dynamic";
 
 export default async function BackupsPage() {
   const item = SETTINGS_NAV.find((entry) => entry.href === "/settings/backups");
+  await scanBackups({ immediate: true }).catch((error) => {
+    console.error("[origami] backup scan failed", error);
+  });
   const [stats, settings, runs] = await Promise.all([
     backupStats(),
     getBackupSettings(),

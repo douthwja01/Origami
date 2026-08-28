@@ -33,6 +33,33 @@ export function joinFolderPath(parent: string, name: string): string {
   return parent ? `${parent}/${name}` : name;
 }
 
+export function folderParentAndName(fullPath: string): {
+  parent: string;
+  name: string;
+} {
+  const slash = fullPath.lastIndexOf("/");
+  if (slash === -1) return { parent: "", name: fullPath };
+  return {
+    parent: fullPath.slice(0, slash),
+    name: fullPath.slice(slash + 1),
+  };
+}
+
+/** Next available filename in a set of names already used in a folder. */
+export function uniquifyFilename(filename: string, used: Set<string>): string {
+  if (!used.has(filename)) return filename;
+  const dot = filename.lastIndexOf(".");
+  const stem = dot > 0 ? filename.slice(0, dot) : filename;
+  const ext = dot > 0 ? filename.slice(dot) : "";
+  let n = 2;
+  let candidate = `${stem}-${n}${ext}`;
+  while (used.has(candidate)) {
+    n += 1;
+    candidate = `${stem}-${n}${ext}`;
+  }
+  return candidate;
+}
+
 export function isUnderFolderPath(path: string, parent: string): boolean {
   if (!parent) return path.length > 0;
   return path === parent || path.startsWith(`${parent}/`);

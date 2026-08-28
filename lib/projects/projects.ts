@@ -33,9 +33,16 @@ import type {
   TagDTO,
 } from "@/lib/shared/types";
 import {
+  ensureProjectVault,
+  ensureVaultFolder,
+  folderStoragePrefix,
+  moveVaultFile,
+  relativeStoragePath,
   removeProjectVault,
   removeVaultFile,
-  renameVaultFile,
+  removeVaultFolder,
+  renameVaultFolder,
+  rewriteStoragePrefix,
   safeFilename,
 } from "@/lib/vault/vault";
 import { logOrigami } from "@/lib/settings/log";
@@ -408,6 +415,7 @@ export async function createProject(input: {
       createdByUserId: input.userId,
     })
     .returning();
+  await ensureProjectVault(row.id);
   if (row.status === "archived") {
     await backupArchivedProject(row);
   }
@@ -669,6 +677,7 @@ export async function ensureProjectFolder(
     if (!existing) {
       await db.insert(projectFolders).values({ projectId, path: built });
     }
+    await ensureVaultFolder(projectId, built);
   }
 }
 
@@ -741,6 +750,62 @@ export async function getAsset(id: string) {
   return row ?? null;
 }
 
+export async function assertAssetNameAvailable(
+  projectId: string,
+  folderPath: string,
+  filename: string,
+  excludeAssetId?: string,
+): Promise<void> {
+  const db = getDb();
+  const fileMatch = [
+    eq(assets.projectId, projectId),
+    eq(assets.folderPath, folderPath),
+    eq(assets.filename, filename),
+  ];
+  if (excludeAssetId) fileMatch.push(ne(assets.id, excludeAssetId));
+  const [clash] = await db
+    .select({ id: assets.id })
+    .from(assets)
+    .where(and(...fileMatch))
+    .limit(1);
+  if (clash) {
+    throw Object.assign(
+      new Error("A file with that name already exists here"),
+      { status: 409 },
+    );
+  }
+
+  const siblingFolder = joinFolderPath(folderPath, filename);
+  const [folderClash] = await db
+    .select({ id: projectFolders.id })
+    .from(projectFolders)
+    .where(
+      and(
+        eq(projectFolders.projectId, projectId),
+        eq(projectFolders.path, siblingFolder),
+      ),
+    )
+    .limit(1);
+  if (folderClash) {
+    throw Object.assign(
+      new Error("A folder with that name already exists here"),
+      { status: 409 },
+    );
+  }
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  let current: unknown = error;
+  while (current && typeof current === "object") {
+    if ("code" in current && (current as { code?: string }).code === "23505") {
+      return true;
+    }
+    current =
+      "cause" in current ? (current as { cause: unknown }).cause : undefined;
+  }
+  return false;
+}
+
 export async function insertAsset(input: {
   id?: string;
   projectId: string;
@@ -761,13 +826,24 @@ export async function insertAsset(input: {
   if (!input.reservedFolder && isHiddenFolderPath(folderPath)) {
     throw Object.assign(new Error("That folder is reserved"), { status: 403 });
   }
+  await assertAssetNameAvailable(input.projectId, folderPath, input.filename);
   const { reservedFolder: _reserved, ...values } = input;
-  const [row] = await db
-    .insert(assets)
-    .values({ ...values, folderPath })
-    .returning();
-  const itemTags = await assignRequiredKindTag(row.id, row.projectId, row.kind);
-  return toAssetDTO(row, itemTags);
+  try {
+    const [row] = await db
+      .insert(assets)
+      .values({ ...values, folderPath })
+      .returning();
+    const itemTags = await assignRequiredKindTag(row.id, row.projectId, row.kind);
+    return toAssetDTO(row, itemTags);
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      throw Object.assign(
+        new Error("A file with that name already exists here"),
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
 }
 
 export async function updateAsset(
@@ -791,7 +867,6 @@ export async function updateAsset(
   }
 
   let filename: string | undefined;
-  let storagePath: string | undefined;
   let mimeType: string | undefined;
   let kind = patch.kind;
   if (patch.filename !== undefined) {
@@ -803,53 +878,32 @@ export async function updateAsset(
     }
     const nextName = safeFilename(raw);
     if (nextName !== existing.filename) {
-      const targetFolder = folderPath ?? existing.folderPath;
-      const db = getDb();
-      const [clash] = await db
-        .select({ id: assets.id })
-        .from(assets)
-        .where(
-          and(
-            eq(assets.projectId, existing.projectId),
-            eq(assets.folderPath, targetFolder),
-            eq(assets.filename, nextName),
-            ne(assets.id, id),
-          ),
-        )
-        .limit(1);
-      if (clash) {
-        throw Object.assign(
-          new Error("A file with that name already exists here"),
-          { status: 409 },
-        );
-      }
-      const siblingFolder = joinFolderPath(targetFolder, nextName);
-      const [folderClash] = await db
-        .select({ id: projectFolders.id })
-        .from(projectFolders)
-        .where(
-          and(
-            eq(projectFolders.projectId, existing.projectId),
-            eq(projectFolders.path, siblingFolder),
-          ),
-        )
-        .limit(1);
-      if (folderClash) {
-        throw Object.assign(
-          new Error("A folder with that name already exists here"),
-          { status: 409 },
-        );
-      }
-      storagePath = await renameVaultFile(
-        existing.storagePath,
-        nextName,
-      );
       filename = nextName;
       mimeType = mimeFromFilename(nextName);
       if (kind === undefined) {
         kind = inferKind(nextName);
       }
     }
+  }
+
+  const nextFolder = folderPath ?? existing.folderPath;
+  const nextFilename = filename ?? existing.filename;
+  const moved =
+    nextFolder !== existing.folderPath || nextFilename !== existing.filename;
+  let storagePath: string | undefined;
+  if (moved) {
+    await assertAssetNameAvailable(
+      existing.projectId,
+      nextFolder,
+      nextFilename,
+      id,
+    );
+    storagePath = relativeStoragePath(
+      existing.projectId,
+      nextFolder,
+      nextFilename,
+    );
+    await moveVaultFile(existing.storagePath, storagePath);
   }
 
   try {
@@ -874,8 +928,16 @@ export async function updateAsset(
     }
     return toAssetDTO(row, itemTags);
   } catch (error) {
-    if (storagePath && filename) {
-      await renameVaultFile(storagePath, existing.filename).catch(() => undefined);
+    if (storagePath) {
+      await moveVaultFile(storagePath, existing.storagePath).catch(
+        () => undefined,
+      );
+    }
+    if (isUniqueViolation(error)) {
+      throw Object.assign(
+        new Error("A file with that name already exists here"),
+        { status: 409 },
+      );
     }
     throw error;
   }
@@ -939,6 +1001,7 @@ export async function createFolder(input: {
       path,
     })
     .returning();
+  await ensureVaultFolder(input.projectId, path);
   return toFolderDTO(row, []);
 }
 
@@ -970,6 +1033,7 @@ export async function deleteFolder(
   for (const row of assetsInFolder) {
     await removeVaultFile(row.storagePath).catch(() => undefined);
   }
+  await removeVaultFolder(projectId, normalized).catch(() => undefined);
   if (assetsInFolder.length > 0) {
     await db.delete(assets).where(
       inArray(
@@ -1127,26 +1191,46 @@ export async function renameFolder(
     )
     .sort((a, b) => b.path.length - a.path.length);
 
-  for (const row of foldersToRewrite) {
-    const nextPath = rewriteFolderPath(row.path, normalized, newPath);
-    if (nextPath === row.path) continue;
-    await db
-      .update(projectFolders)
-      .set({ path: nextPath })
-      .where(eq(projectFolders.id, row.id));
-  }
+  await renameVaultFolder(projectId, normalized, newPath);
+  try {
+    for (const row of foldersToRewrite) {
+      const nextPath = rewriteFolderPath(row.path, normalized, newPath);
+      if (nextPath === row.path) continue;
+      await db
+        .update(projectFolders)
+        .set({ path: nextPath })
+        .where(eq(projectFolders.id, row.id));
+    }
 
-  const assetsToRewrite = await db
-    .select()
-    .from(assets)
-    .where(eq(assets.projectId, projectId));
-  for (const row of assetsToRewrite) {
-    const nextFolder = rewriteFolderPath(row.folderPath, normalized, newPath);
-    if (nextFolder === row.folderPath) continue;
-    await db
-      .update(assets)
-      .set({ folderPath: nextFolder })
-      .where(eq(assets.id, row.id));
+    const fromPrefix = folderStoragePrefix(projectId, normalized);
+    const toPrefix = folderStoragePrefix(projectId, newPath);
+    const assetsToRewrite = await db
+      .select()
+      .from(assets)
+      .where(eq(assets.projectId, projectId));
+    for (const row of assetsToRewrite) {
+      const nextFolder = rewriteFolderPath(row.folderPath, normalized, newPath);
+      const nextStorage = rewriteStoragePrefix(
+        row.storagePath,
+        fromPrefix,
+        toPrefix,
+      );
+      if (nextFolder === row.folderPath && nextStorage === row.storagePath) {
+        continue;
+      }
+      await db
+        .update(assets)
+        .set({
+          ...(nextFolder !== row.folderPath ? { folderPath: nextFolder } : {}),
+          ...(nextStorage !== row.storagePath ? { storagePath: nextStorage } : {}),
+        })
+        .where(eq(assets.id, row.id));
+    }
+  } catch (error) {
+    await renameVaultFolder(projectId, newPath, normalized).catch(
+      () => undefined,
+    );
+    throw error;
   }
 
   if (!existing && foldersToRewrite.length === 0) {
