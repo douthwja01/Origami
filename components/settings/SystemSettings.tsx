@@ -2,9 +2,12 @@
 
 import { useState } from "react";
 import type { SystemUploadSettings } from "@/lib/settings/upload-settings";
+import type { SystemVaultSettings } from "@/lib/settings/vault-settings";
+
+type SystemPageSettings = SystemUploadSettings & SystemVaultSettings;
 
 type Props = {
-  initialSettings: SystemUploadSettings;
+  initialSettings: SystemPageSettings;
 };
 
 function formatLimit(mb: number): string {
@@ -20,26 +23,32 @@ function formatLimit(mb: number): string {
 export function SystemSettings({ initialSettings }: Props) {
   const [settings, setSettings] = useState(initialSettings);
   const [input, setInput] = useState(String(initialSettings.maxUploadMb));
+  const [vaultInput, setVaultInput] = useState(initialSettings.vaultDir);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function save(maxUploadMb: number | null) {
+  async function save(patch: {
+    maxUploadMb?: number | null;
+    vaultDir?: string | null;
+  }) {
     setBusy(true);
     setError(null);
     const res = await fetch("/api/settings/system", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ maxUploadMb }),
+      body: JSON.stringify(patch),
     });
     const data = await res.json();
     setBusy(false);
     if (!res.ok) {
       setError(data.error || "Could not save system settings");
       setInput(String(settings.maxUploadMb));
+      setVaultInput(settings.vaultDir);
       return;
     }
     setSettings(data.settings);
     setInput(String(data.settings.maxUploadMb));
+    setVaultInput(data.settings.vaultDir);
   }
 
   function commitLimit() {
@@ -57,17 +66,92 @@ export function SystemSettings({ initialSettings }: Props) {
     if (mb === settings.maxUploadMb && !settings.usesEnvDefault) {
       return;
     }
-    if (
-      settings.usesEnvDefault &&
-      mb === settings.envDefaultMb
-    ) {
+    if (settings.usesEnvDefault && mb === settings.envDefaultMb) {
       return;
     }
-    void save(mb);
+    void save({ maxUploadMb: mb });
+  }
+
+  function commitVaultDir() {
+    const trimmed = vaultInput.trim();
+    if (!trimmed) {
+      setVaultInput(settings.vaultDir);
+      return;
+    }
+    if (trimmed === settings.vaultDir) return;
+    void save({ vaultDir: trimmed });
   }
 
   return (
     <div className="mt-6 max-w-2xl space-y-4">
+      <section className="flex flex-col rounded-xl border border-line bg-raised p-4">
+        <h2 className="text-[13px] font-medium">Vault location</h2>
+        <p className="mt-1 text-[13px] text-muted">
+          Folder where project files are stored. This defaults to the
+          environment setting and can be pointed at any directory this server
+          can write to, including a mapped drive or a mounted Samba share.
+          Changing the path does not move existing files.
+        </p>
+        <label className="mt-4 block">
+          <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted">
+            Vault folder
+          </span>
+          <input
+            type="text"
+            spellCheck={false}
+            autoComplete="off"
+            value={vaultInput}
+            disabled={busy}
+            onChange={(event) => setVaultInput(event.target.value)}
+            onBlur={commitVaultDir}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.currentTarget.blur();
+              }
+            }}
+            className="w-full rounded-md border border-line bg-canvas px-3 py-2 font-mono text-[13px] text-ink outline-none focus:border-accent"
+          />
+        </label>
+        <p className="mt-2 text-[12px] text-muted">
+          Current location:{" "}
+          <span className="font-mono text-[11px] text-ink">
+            {settings.vaultDir}
+          </span>
+          {settings.vaultDirUsesEnvDefault ? " (environment default)" : null}
+        </p>
+        <p className="mt-1 text-[12px] text-muted">
+          Environment default:{" "}
+          <span className="font-mono text-[11px] text-ink">
+            {settings.vaultDirEnvDefault}
+          </span>{" "}
+          from{" "}
+          <span className="font-mono text-[11px]">{settings.vaultDirEnvVar}</span>
+          .
+        </p>
+        {settings.vaultHostDir ? (
+          <p className="mt-1 text-[12px] text-muted">
+            Docker host folder{" "}
+            <span className="font-mono text-[11px]">{settings.vaultHostEnvVar}</span>{" "}
+            is bind-mounted as that default:{" "}
+            <span className="font-mono text-[11px] text-ink">
+              {settings.vaultHostDir}
+            </span>
+            . To use a Samba share with Docker, point that host folder at the
+            share and keep this setting on the environment default.
+          </p>
+        ) : null}
+        {settings.vaultDirUsesEnvDefault ? null : (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void save({ vaultDir: null })}
+            className="mt-3 self-start text-[12px] text-muted hover:text-ink disabled:opacity-60"
+          >
+            Reset to environment default
+          </button>
+        )}
+      </section>
+
       <section className="flex flex-col rounded-xl border border-line bg-raised p-4">
         <h2 className="text-[13px] font-medium">Uploads</h2>
         <p className="mt-1 text-[13px] text-muted">
@@ -110,7 +194,7 @@ export function SystemSettings({ initialSettings }: Props) {
           <button
             type="button"
             disabled={busy}
-            onClick={() => void save(null)}
+            onClick={() => void save({ maxUploadMb: null })}
             className="mt-3 self-start text-[12px] text-muted hover:text-ink disabled:opacity-60"
           >
             Reset to environment default

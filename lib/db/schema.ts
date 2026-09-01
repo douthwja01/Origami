@@ -300,6 +300,7 @@ export const appSettings = pgTable("app_settings", {
   vaultLogoMime: text("vault_logo_mime"),
   vaultLogoHash: text("vault_logo_hash"),
   maxUploadMb: integer("max_upload_mb"),
+  vaultDir: text("vault_dir"),
 });
 
 export const projectBackups = pgTable(

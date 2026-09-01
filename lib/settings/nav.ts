@@ -12,7 +12,7 @@ export const SETTINGS_NAV = [
   {
     href: "/settings/system",
     label: "System",
-    description: "Upload limits and other server defaults",
+    description: "Vault location, upload limits, and other server defaults",
   },
   {
     href: "/settings/backups",

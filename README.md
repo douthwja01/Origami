@@ -36,8 +36,8 @@ npm run dev
 | `ORIGAMI_USER` | Login username |
 | `ORIGAMI_PASSWORD` | Login password (dev / first run) |
 | `ORIGAMI_PASSWORD_HASH` | bcrypt hash; preferred in production |
-| `ORIGAMI_VAULT_DIR` | Where uploaded files are stored (inside the process / container) |
-| `ORIGAMI_VAULT_HOST` | Host folder bind-mounted as the vault when using Docker Compose (default `./data/vault`) |
+| `ORIGAMI_VAULT_DIR_DEFAULT` | Default vault folder inside the process / container. Override in Settings → System. Legacy name `ORIGAMI_VAULT_DIR` is still accepted. |
+| `ORIGAMI_VAULT_HOST` | Host folder bind-mounted as that vault default when using Docker Compose (default `./data/vault`) |
 | `ORIGAMI_BACKUP_DIR` | Where scheduled project backups are written (inside the process / container) |
 | `ORIGAMI_BACKUP_HOST` | Host folder bind-mounted for scheduled backups when using Docker Compose (default `./data/backups`) |
 | `ORIGAMI_LOG_DIR` | Where application logs are written (inside the process / container) |
@@ -70,7 +70,7 @@ origami.example.com {
 
 4. Run `docker compose up -d --build`.
 
-Postgres data lives in the `pgdata` Docker volume. Vault files are bind-mounted from `./data/vault` on the host (override with `ORIGAMI_VAULT_HOST` in `.env`). Scheduled project backups go to `./data/backups` (override with `ORIGAMI_BACKUP_HOST`). Application logs go to `./logs` (override with `ORIGAMI_LOG_HOST`). Back the database, vault, and backups up.
+Postgres data lives in the `pgdata` Docker volume. Vault files are bind-mounted from `./data/vault` on the host (override with `ORIGAMI_VAULT_HOST` in `.env`). That host folder is the environment default; Settings → System can point the vault at another path the container can write to. Scheduled project backups go to `./data/backups` (override with `ORIGAMI_BACKUP_HOST`). Application logs go to `./logs` (override with `ORIGAMI_LOG_HOST`). Back the database, vault, and backups up.
 
 ## Projects
 
@@ -81,7 +81,7 @@ Postgres data lives in the `pgdata` Docker volume. Vault files are bind-mounted 
 
 ## Vault
 
-Files are copied into the vault, not linked in place. Kind is inferred from the file extension and can be overridden by uploading on a specific tab.
+Files are copied into the vault, not linked in place. Kind is inferred from the file extension and can be overridden by uploading on a specific tab. The vault folder defaults to `ORIGAMI_VAULT_DIR_DEFAULT` and can be changed in Settings → System without restarting. Changing that path does not move existing files.
 
 - **Media** — images, audio, video (inline preview)
 - **Code** — source and archives (syntax highlighting)

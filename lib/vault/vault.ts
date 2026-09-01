@@ -4,17 +4,25 @@ import path from "node:path";
 import { createReadStream, createWriteStream } from "node:fs";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
+import { vaultDirFromEnv } from "@/lib/vault/vault-dir-env";
 
+const globalForVault = globalThis as unknown as {
+  origamiVaultDirOverride?: string | null;
+};
+
+/** Settings override when set; otherwise the environment default. */
 export function vaultRoot(): string {
-  return process.env.ORIGAMI_VAULT_DIR || path.join(process.cwd(), "data", "vault");
+  return globalForVault.origamiVaultDirOverride || vaultDirFromEnv();
+}
+
+/** Apply a stored settings path (`null` clears back to the environment default). */
+export function applyVaultDirOverride(dir: string | null | undefined): void {
+  const trimmed = dir?.trim();
+  globalForVault.origamiVaultDirOverride = trimmed ? trimmed : null;
 }
 
 function joinVault(...parts: string[]): string {
-  const configured = process.env.ORIGAMI_VAULT_DIR;
-  if (configured) {
-    return path.join(/*turbopackIgnore: true*/ configured, ...parts);
-  }
-  return path.join(process.cwd(), "data", "vault", ...parts);
+  return path.join(/*turbopackIgnore: true*/ vaultRoot(), ...parts);
 }
 
 export function safeFilename(name: string): string {
