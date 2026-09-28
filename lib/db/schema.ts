@@ -301,6 +301,8 @@ export const appSettings = pgTable("app_settings", {
   vaultLogoHash: text("vault_logo_hash"),
   maxUploadMb: integer("max_upload_mb"),
   vaultDir: text("vault_dir"),
+  /** AES-GCM payload for SMB server, share, username, and password. */
+  vaultSmb: text("vault_smb"),
 });
 
 export const projectBackups = pgTable(

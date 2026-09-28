@@ -4,7 +4,19 @@ import { eq } from "drizzle-orm";
 import { logIfDatabaseUnreachable } from "@/lib/db/connection-error";
 import { getDb } from "@/lib/db";
 import { appSettings } from "@/lib/db/schema";
+import { connectSmb, disconnectSmb, offlineSmbPath } from "@/lib/vault/smb-connect";
+import {
+  decryptSmbSettings,
+  encryptSmbSettings,
+  type SmbSettings,
+} from "@/lib/vault/smb-secret";
 import { applyVaultDirOverride, vaultRoot } from "@/lib/vault/vault";
+import {
+  interpretVaultDir,
+  segmentsBelow,
+  uncShareRoot,
+} from "@/lib/vault/vault-location";
+import { formatSmbVaultDir } from "@/lib/vault/vault-location-form";
 import {
   VAULT_HOST_ENV_VAR,
   vaultDirEnvVarName,
@@ -12,10 +24,10 @@ import {
   vaultHostDirFromEnv,
 } from "@/lib/vault/vault-dir-env";
 
-const VAULT_DIR_MAX = 4096;
-
 export type SystemVaultSettings = {
-  /** Effective vault folder as seen by this process. */
+  /** Local folder, or the SMB share shown as a UNC path. */
+  vaultKind: "local" | "smb";
+  /** Effective vault folder as seen by this process, or the SMB display path. */
   vaultDir: string;
   /** Default from `ORIGAMI_VAULT_DIR_DEFAULT` (or legacy `ORIGAMI_VAULT_DIR`). */
   vaultDirEnvDefault: string;
@@ -26,18 +38,35 @@ export type SystemVaultSettings = {
   /** Docker host bind-mount for the env default, when set. */
   vaultHostDir: string | null;
   vaultHostEnvVar: string;
+  smbServer: string;
+  smbShare: string;
+  smbFolder: string;
+  smbUsername: string;
+  /** True when an encrypted password is already stored. */
+  smbPasswordSet: boolean;
+  /** Set when saved SMB settings could not be opened. */
+  smbError: string | null;
+};
+
+export type SmbSettingsInput = {
+  server: string;
+  share: string;
+  folder?: string;
+  username: string;
+  password?: string;
 };
 
 async function ensureSettingsRow() {
   const db = getDb();
   let [row] = await db
-    .select({ vaultDir: appSettings.vaultDir })
+    .select({ vaultDir: appSettings.vaultDir, vaultSmb: appSettings.vaultSmb })
     .from(appSettings)
     .where(eq(appSettings.id, 1))
     .limit(1);
   if (!row) {
     [row] = await db.insert(appSettings).values({ id: 1 }).returning({
       vaultDir: appSettings.vaultDir,
+      vaultSmb: appSettings.vaultSmb,
     });
   }
   return row;
@@ -55,43 +84,93 @@ function sameVaultDir(a: string, b: string): boolean {
     : left === right;
 }
 
-function stripWrappingQuotes(value: string): string {
-  if (value.length >= 2) {
-    const start = value[0];
-    const end = value[value.length - 1];
-    if ((start === '"' && end === '"') || (start === "'" && end === "'")) {
-      return value.slice(1, -1).trim();
-    }
-  }
-  return value;
-}
-
 export function parseVaultDir(value: unknown): string | null | false {
   if (value === null) return null;
-  if (typeof value !== "string") return false;
-  const dir = stripWrappingQuotes(value.trim());
-  if (!dir || dir.includes("\0") || dir.length > VAULT_DIR_MAX) return false;
-  if (sameVaultDir(dir, vaultDirFromEnv())) return null;
-  return dir;
+  const interpreted = interpretVaultDir(value);
+  if (!interpreted.ok) return false;
+  if (sameVaultDir(interpreted.dir, vaultDirFromEnv())) return null;
+  return interpreted.dir;
+}
+
+async function statKind(dir: string): Promise<"dir" | "other" | "missing"> {
+  try {
+    const info = await stat(dir);
+    return info.isDirectory() ? "dir" : "other";
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return "missing";
+    throw error;
+  }
+}
+
+function directoryError(): Error {
+  return Object.assign(new Error("Vault location must be a directory"), {
+    status: 400,
+  });
+}
+
+function unreachableShareError(share: string): Error {
+  return Object.assign(
+    new Error(
+      `Cannot reach the network share ${share}. Check the path and that this computer can open the share.`,
+    ),
+    { status: 400 },
+  );
+}
+
+async function mkdirSegments(root: string, segments: string[]): Promise<void> {
+  let current = root;
+  for (const segment of segments) {
+    current = path.join(current, segment);
+    try {
+      await mkdir(current);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+  }
 }
 
 async function ensureDirectory(dir: string): Promise<void> {
+  let kind: "dir" | "other" | "missing";
   try {
-    const info = await stat(dir);
-    if (!info.isDirectory()) {
-      throw Object.assign(new Error("Vault location must be a directory"), {
-        status: 400,
-      });
-    }
-    return;
+    kind = await statKind(dir);
   } catch (error) {
-    if ((error as { status?: number }).status === 400) throw error;
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+    const share = process.platform === "win32" ? uncShareRoot(dir) : null;
+    if (share) throw unreachableShareError(share);
+    throw Object.assign(
+      new Error(`Cannot use this vault location: ${(error as Error).message}`),
+      { status: 400 },
+    );
+  }
+  if (kind === "dir") return;
+  if (kind === "other") throw directoryError();
+
+  const share = process.platform === "win32" ? uncShareRoot(dir) : null;
+  if (share) {
+    let shareKind: "dir" | "other" | "missing";
+    try {
+      shareKind = await statKind(share);
+    } catch {
+      throw unreachableShareError(share);
+    }
+    if (shareKind !== "dir") throw unreachableShareError(share);
+    const segments = segmentsBelow(share, dir);
+    if (!segments) {
       throw Object.assign(
-        new Error(`Cannot use this vault location: ${(error as Error).message}`),
+        new Error(`Cannot create vault location under ${share}`),
         { status: 400 },
       );
     }
+    if (segments.length === 0) return;
+    try {
+      await mkdirSegments(share, segments);
+    } catch (error) {
+      if ((await statKind(dir).catch(() => "missing")) === "dir") return;
+      throw Object.assign(
+        new Error(`Cannot create vault location: ${(error as Error).message}`),
+        { status: 400 },
+      );
+    }
+    return;
   }
 
   try {
@@ -104,19 +183,105 @@ async function ensureDirectory(dir: string): Promise<void> {
   }
 }
 
-export async function getSystemVaultSettings(): Promise<SystemVaultSettings> {
-  const row = await ensureSettingsRow();
-  applyVaultDirOverride(row.vaultDir);
-  const vaultDirEnvDefault = vaultDirFromEnv();
-  const vaultDirUsesEnvDefault = row.vaultDir == null;
+function httpError(message: string, status = 400): Error {
+  return Object.assign(new Error(message), { status });
+}
+
+function cleanToken(value: string, label: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || /[\\/\0\r\n]/.test(trimmed) || trimmed === "." || trimmed === "..") {
+    throw httpError(`${label} must be a name without slashes`);
+  }
+  return trimmed;
+}
+
+function cleanFolder(value: string): string {
+  const parts = value
+    .split(/[\\/]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.some((part) => part === "." || part === ".." || part.includes("\0"))) {
+    throw httpError("Folder inside the share cannot contain . or ..");
+  }
+  return parts.join("/");
+}
+
+function readStoredSmb(payload: string | null): SmbSettings | null {
+  if (!payload) return null;
+  return decryptSmbSettings(payload);
+}
+
+function settingsResponse(
+  smb: SmbSettings | null,
+  options: {
+    vaultKind: "local" | "smb";
+    vaultDir: string;
+    usesEnvDefault: boolean;
+    smbError: string | null;
+  },
+): SystemVaultSettings {
   return {
-    vaultDir: vaultRoot(),
-    vaultDirEnvDefault,
+    vaultKind: options.vaultKind,
+    vaultDir: options.vaultDir,
+    vaultDirEnvDefault: vaultDirFromEnv(),
     vaultDirEnvVar: vaultDirEnvVarName(),
-    vaultDirUsesEnvDefault,
+    vaultDirUsesEnvDefault: options.usesEnvDefault,
     vaultHostDir: vaultHostDirFromEnv(),
     vaultHostEnvVar: VAULT_HOST_ENV_VAR,
+    smbServer: smb?.server ?? "",
+    smbShare: smb?.share ?? "",
+    smbFolder: smb?.folder ?? "",
+    smbUsername: smb?.username ?? "",
+    smbPasswordSet: Boolean(smb?.password),
+    smbError: options.smbError,
   };
+}
+
+async function activateSmb(smb: SmbSettings): Promise<SystemVaultSettings> {
+  const shown = formatSmbVaultDir(smb.server, smb.share, smb.folder) ?? "";
+  try {
+    const connected = await connectSmb(smb);
+    applyVaultDirOverride(connected.fsPath);
+    return settingsResponse(smb, {
+      vaultKind: "smb",
+      vaultDir: connected.displayPath,
+      usesEnvDefault: false,
+      smbError: null,
+    });
+  } catch (error) {
+    applyVaultDirOverride(offlineSmbPath());
+    return settingsResponse(smb, {
+      vaultKind: "smb",
+      vaultDir: shown,
+      usesEnvDefault: false,
+      smbError: (error as Error).message,
+    });
+  }
+}
+
+export async function getSystemVaultSettings(): Promise<SystemVaultSettings> {
+  const row = await ensureSettingsRow();
+  if (row.vaultSmb) {
+    try {
+      const smb = readStoredSmb(row.vaultSmb);
+      if (smb) return activateSmb(smb);
+    } catch (error) {
+      applyVaultDirOverride(offlineSmbPath());
+      return settingsResponse(null, {
+        vaultKind: "smb",
+        vaultDir: "",
+        usesEnvDefault: false,
+        smbError: (error as Error).message,
+      });
+    }
+  }
+  applyVaultDirOverride(row.vaultDir);
+  return settingsResponse(null, {
+    vaultKind: "local",
+    vaultDir: vaultRoot(),
+    usesEnvDefault: row.vaultDir == null,
+    smbError: null,
+  });
 }
 
 export async function hydrateVaultDirFromSettings(): Promise<void> {
@@ -131,35 +296,80 @@ export async function hydrateVaultDirFromSettings(): Promise<void> {
   }
 }
 
+function parseSmbInput(input: SmbSettingsInput, existing: SmbSettings | null): SmbSettings {
+  const server = cleanToken(input.server ?? "", "Server");
+  const share = cleanToken(input.share ?? "", "Share");
+  const folder = cleanFolder(input.folder ?? "");
+  const username = (input.username ?? "").trim();
+  if (!username || /[/\0\r\n]/.test(username)) {
+    throw httpError("Enter the SMB username");
+  }
+  const typed = input.password ?? "";
+  if (/[\r\n]/.test(typed)) {
+    throw httpError("Password cannot contain line breaks");
+  }
+  const sameAccount =
+    existing !== null &&
+    existing.server === server &&
+    existing.share === share &&
+    existing.username === username;
+  const password = typed || (sameAccount ? existing.password : "");
+  if (!password && !sameAccount) {
+    throw httpError("Enter the SMB password");
+  }
+  return { server, share, folder, username, password };
+}
+
 export async function updateSystemVaultSettings(patch: {
   vaultDir?: string | null;
+  smb?: SmbSettingsInput | null;
 }): Promise<SystemVaultSettings> {
-  let stored: string | null | undefined;
-
-  if (patch.vaultDir !== undefined) {
-    const parsed = parseVaultDir(patch.vaultDir);
-    if (parsed === false) {
-      throw Object.assign(
-        new Error("Vault location must be a folder path this server can write to"),
-        { status: 400 },
-      );
+  if (patch.smb) {
+    const row = await ensureSettingsRow();
+    let existing: SmbSettings | null = null;
+    if (row.vaultSmb) {
+      try {
+        existing = readStoredSmb(row.vaultSmb);
+      } catch {
+        existing = null;
+      }
     }
-    stored = parsed;
-  }
-
-  if (stored !== undefined) {
-    await ensureDirectory(stored ?? vaultDirFromEnv());
-  }
-
-  await ensureSettingsRow();
-  if (stored !== undefined) {
+    const smb = parseSmbInput(patch.smb, existing);
+    let connected;
+    try {
+      connected = await connectSmb(smb);
+      await ensureDirectory(connected.fsPath);
+    } catch (error) {
+      throw httpError((error as Error).message);
+    }
     const db = getDb();
     await db
       .update(appSettings)
-      .set({ vaultDir: stored })
+      .set({ vaultDir: null, vaultSmb: encryptSmbSettings(smb) })
       .where(eq(appSettings.id, 1));
-    applyVaultDirOverride(stored);
+    applyVaultDirOverride(connected.fsPath);
+    return getSystemVaultSettings();
   }
 
+  if (patch.vaultDir === undefined) return getSystemVaultSettings();
+
+  let stored: string | null;
+  if (patch.vaultDir === null) {
+    stored = null;
+  } else {
+    const interpreted = interpretVaultDir(patch.vaultDir);
+    if (!interpreted.ok) throw httpError(interpreted.error);
+    stored = sameVaultDir(interpreted.dir, vaultDirFromEnv()) ? null : interpreted.dir;
+  }
+
+  await disconnectSmb();
+  await ensureDirectory(stored ?? vaultDirFromEnv());
+  await ensureSettingsRow();
+  const db = getDb();
+  await db
+    .update(appSettings)
+    .set({ vaultDir: stored, vaultSmb: null })
+    .where(eq(appSettings.id, 1));
+  applyVaultDirOverride(stored);
   return getSystemVaultSettings();
 }

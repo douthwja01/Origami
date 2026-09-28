@@ -6,7 +6,6 @@ import {
 } from "@/lib/settings/upload-settings";
 import {
   getSystemVaultSettings,
-  parseVaultDir,
   updateSystemVaultSettings,
 } from "@/lib/settings/vault-settings";
 import { maxUploadMbFromEnv } from "@/lib/settings/upload-limit-env";
@@ -33,15 +32,19 @@ export async function PATCH(request: Request) {
   const user = await requireUser();
   if (isResponse(user)) return user;
 
-  let body: { maxUploadMb?: unknown; vaultDir?: unknown };
+  let body: { maxUploadMb?: unknown; vaultDir?: unknown; smb?: unknown };
   try {
     body = await request.json();
   } catch {
     return json({ error: "Invalid JSON" }, 400);
   }
 
-  if (body.maxUploadMb === undefined && body.vaultDir === undefined) {
-    return json({ error: "maxUploadMb or vaultDir is required" }, 400);
+  if (
+    body.maxUploadMb === undefined &&
+    body.vaultDir === undefined &&
+    body.smb === undefined
+  ) {
+    return json({ error: "maxUploadMb, vaultDir, or smb is required" }, 400);
   }
 
   try {
@@ -65,19 +68,28 @@ export async function PATCH(request: Request) {
       await updateSystemUploadSettings({ maxUploadMb });
     }
 
-    if (body.vaultDir !== undefined) {
-      if (body.vaultDir !== null && parseVaultDir(body.vaultDir) === false) {
-        return json(
-          {
-            error:
-              "Vault location must be a folder path this server can write to",
-          },
-          400,
-        );
+    if (body.smb !== undefined) {
+      if (!body.smb || typeof body.smb !== "object") {
+        return json({ error: "SMB settings are required" }, 400);
       }
+      const smb = body.smb as Record<string, unknown>;
+      const text = (key: string) => (typeof smb[key] === "string" ? smb[key] : "");
+      await updateSystemVaultSettings({
+        smb: {
+          server: text("server"),
+          share: text("share"),
+          folder: text("folder"),
+          username: text("username"),
+          password: text("password"),
+        },
+      });
+    } else if (body.vaultDir !== undefined) {
       await updateSystemVaultSettings({
         vaultDir: body.vaultDir === null ? null : (body.vaultDir as string),
       });
+    }
+
+    if (body.smb !== undefined || body.vaultDir !== undefined) {
       const { runStorageReconcile } = await import(
         "@/lib/vault/scan-scheduler"
       );

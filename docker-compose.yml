@@ -38,6 +38,12 @@ services:
       - ${ORIGAMI_BACKUP_HOST:-./data/backups}:/data/backups
       # Host directory for application logs, separate from vault/backups. Override with ORIGAMI_LOG_HOST.
       - ${ORIGAMI_LOG_HOST:-./logs}:/data/logs
+    # SMB vaults are mounted inside the container with stored credentials.
+    cap_add:
+      - SYS_ADMIN
+      - DAC_READ_SEARCH
+    security_opt:
+      - apparmor:unconfined
     depends_on:
       db:
         condition: service_healthy
