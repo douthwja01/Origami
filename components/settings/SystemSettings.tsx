@@ -4,11 +4,24 @@ import { useState } from "react";
 import type { SystemUploadSettings } from "@/lib/settings/upload-settings";
 import type { SystemVaultSettings } from "@/lib/settings/vault-settings";
 import {
+  formatSmbVaultDir,
   type VaultLocationFields,
   type VaultLocationKind,
 } from "@/lib/vault/vault-location-form";
 
 type SystemPageSettings = SystemUploadSettings & SystemVaultSettings;
+
+type VaultChange = {
+  nextLabel: string;
+  vaultDir?: string | null;
+  smb?: {
+    server: string;
+    share: string;
+    folder: string;
+    username: string;
+    password: string;
+  };
+};
 
 type Props = {
   initialSettings: SystemPageSettings;
@@ -81,6 +94,8 @@ export function SystemSettings({ initialSettings }: Props) {
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [vaultPrompt, setVaultPrompt] = useState<VaultChange | null>(null);
+  const [deleteWarning, setDeleteWarning] = useState<VaultChange | null>(null);
 
   function applyVaultForm(next: SystemPageSettings) {
     setVaultForm(fieldsFromSettings(next));
@@ -158,13 +173,8 @@ export function SystemSettings({ initialSettings }: Props) {
   async function save(patch: {
     maxUploadMb?: number | null;
     vaultDir?: string | null;
-    smb?: {
-      server: string;
-      share: string;
-      folder: string;
-      username: string;
-      password: string;
-    };
+    smb?: VaultChange["smb"];
+    vaultFiles?: "delete" | "keep";
   }) {
     setBusy(true);
     setError(null);
@@ -207,6 +217,20 @@ export function SystemSettings({ initialSettings }: Props) {
     void save({ maxUploadMb: mb });
   }
 
+  function vaultPatch(change: VaultChange) {
+    if (change.smb) return { smb: change.smb };
+    return { vaultDir: change.vaultDir };
+  }
+
+  function beginVaultChange(change: VaultChange) {
+    if (sameVaultPath(change.nextLabel, settings.vaultDir)) {
+      void save(vaultPatch(change));
+      return;
+    }
+    setError(null);
+    setVaultPrompt(change);
+  }
+
   function updateVault() {
     const pending = pendingVaultDir();
     if ("unchanged" in pending) return;
@@ -215,10 +239,37 @@ export function SystemSettings({ initialSettings }: Props) {
       return;
     }
     if ("smb" in pending) {
-      void save({ smb: pending.smb });
+      beginVaultChange({
+        smb: pending.smb,
+        nextLabel:
+          formatSmbVaultDir(
+            pending.smb.server,
+            pending.smb.share,
+            pending.smb.folder,
+          ) ?? pending.smb.server,
+      });
       return;
     }
-    void save({ vaultDir: pending.dir });
+    beginVaultChange({ vaultDir: pending.dir, nextLabel: pending.dir });
+  }
+
+  function confirmVaultChange(vaultFiles: "delete" | "keep") {
+    if (!vaultPrompt) return;
+    if (vaultFiles === "delete") {
+      setDeleteWarning(vaultPrompt);
+      setVaultPrompt(null);
+      return;
+    }
+    const patch = vaultPatch(vaultPrompt);
+    setVaultPrompt(null);
+    void save({ ...patch, vaultFiles });
+  }
+
+  function confirmDeleteVaultFiles() {
+    if (!deleteWarning) return;
+    const patch = vaultPatch(deleteWarning);
+    setDeleteWarning(null);
+    void save({ ...patch, vaultFiles: "delete" });
   }
 
   return (
@@ -229,7 +280,8 @@ export function SystemSettings({ initialSettings }: Props) {
           Folder where project files are stored. A local folder is on this
           computer. An SMB share can be on another machine: the username and
           password are encrypted with the server secret before they are saved.
-          Changing the path does not move existing files.
+          Files are not moved. When the location changes, you choose whether
+          the current vault files are deleted before the new vault is initialized.
         </p>
         <form
           className="mt-4 space-y-3"
@@ -370,7 +422,12 @@ export function SystemSettings({ initialSettings }: Props) {
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void save({ vaultDir: null })}
+                onClick={() =>
+                  beginVaultChange({
+                    vaultDir: null,
+                    nextLabel: settings.vaultDirEnvDefault,
+                  })
+                }
                 className="text-[12px] text-muted hover:text-ink disabled:opacity-60"
               >
                 Reset to environment default
@@ -462,6 +519,100 @@ export function SystemSettings({ initialSettings }: Props) {
       </section>
 
       {error ? <p className="text-[12px] text-accent">{error}</p> : null}
+      {vaultPrompt ? (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/55 p-4 pt-[18vh]">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="vault-move-title"
+            className="w-full max-w-md rounded-xl border border-line bg-raised p-5"
+          >
+            <h2 id="vault-move-title" className="text-[16px] font-medium">
+              Change vault location?
+            </h2>
+            <p className="mt-2 text-[13px] text-muted">
+              The new vault will be initialized at{" "}
+              <span className="font-mono text-[12px] text-ink">{vaultPrompt.nextLabel}</span>.
+              File records for the current vault are cleared. Projects stay.
+            </p>
+            <p className="mt-2 text-[13px] text-muted">
+              Current files are in{" "}
+              <span className="font-mono text-[12px] text-ink">{settings.vaultDir}</span>.
+            </p>
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => confirmVaultChange("delete")}
+                className="rounded-md bg-accent px-3 py-2 text-[13px] font-medium text-canvas disabled:opacity-60"
+              >
+                Delete vault files and reinitialize
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => confirmVaultChange("keep")}
+                className="rounded-md border border-line px-3 py-2 text-[13px] text-ink disabled:opacity-60"
+              >
+                Keep vault files and reinitialize
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setVaultPrompt(null)}
+                className="px-3 py-2 text-[13px] text-muted"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {deleteWarning ? (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/55 p-4 pt-[18vh]">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="vault-delete-title"
+            className="w-full max-w-md rounded-xl border border-line bg-raised p-5"
+          >
+            <h2 id="vault-delete-title" className="text-[16px] font-medium text-accent">
+              Delete vault files?
+            </h2>
+            <p className="mt-2 text-[13px] text-muted">
+              This permanently deletes all files in the current vault at{" "}
+              <span className="font-mono text-[12px] text-ink">{settings.vaultDir}</span>.
+            </p>
+            <p className="mt-2 text-[13px] text-muted">
+              Any files already at the new location{" "}
+              <span className="font-mono text-[12px] text-ink">{deleteWarning.nextLabel}</span>{" "}
+              will also be permanently deleted before that vault is initialized.
+            </p>
+            <p className="mt-2 text-[13px] text-muted">This cannot be undone.</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setVaultPrompt(deleteWarning);
+                  setDeleteWarning(null);
+                }}
+                className="px-3 py-2 text-[13px] text-muted"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => confirmDeleteVaultFiles()}
+                className="rounded-md bg-accent px-3 py-2 text-[13px] font-medium text-canvas disabled:opacity-60"
+              >
+                Delete files and continue
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

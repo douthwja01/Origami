@@ -84,6 +84,15 @@ async function isDirectory(dir: string): Promise<boolean> {
   }
 }
 
+/** Filesystem path the share will use after it is connected. */
+export function smbFsPath(settings: SmbSettings): string {
+  const segments = folderSegments(settings.folder);
+  if (process.platform === "win32") {
+    return path.win32.join(shareUnc(settings), ...segments);
+  }
+  return path.join(MOUNT_POINT, ...segments);
+}
+
 function shareUnc(settings: SmbSettings): string {
   return `\\\\${settings.server}\\${settings.share}`;
 }
@@ -196,6 +205,13 @@ export async function disconnectSmb(): Promise<void> {
   globalForSmb.origamiSmbActive = null;
   if (process.platform === "win32") return;
   await run("umount", [MOUNT_POINT], "").catch(() => undefined);
+}
+
+/** True when this folder is the Linux SMB mount or a directory inside it. */
+export function vaultUsesSmbMount(dir: string): boolean {
+  if (process.platform === "win32") return false;
+  const rel = path.relative(MOUNT_POINT, dir);
+  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
 }
 
 export function offlineSmbPath(): string {

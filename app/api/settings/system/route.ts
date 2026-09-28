@@ -7,6 +7,7 @@ import {
 import {
   getSystemVaultSettings,
   updateSystemVaultSettings,
+  type VaultFileAction,
 } from "@/lib/settings/vault-settings";
 import { maxUploadMbFromEnv } from "@/lib/settings/upload-limit-env";
 
@@ -32,7 +33,7 @@ export async function PATCH(request: Request) {
   const user = await requireUser();
   if (isResponse(user)) return user;
 
-  let body: { maxUploadMb?: unknown; vaultDir?: unknown; smb?: unknown };
+  let body: { maxUploadMb?: unknown; vaultDir?: unknown; smb?: unknown; vaultFiles?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -68,6 +69,14 @@ export async function PATCH(request: Request) {
       await updateSystemUploadSettings({ maxUploadMb });
     }
 
+    const vaultFiles =
+      body.vaultFiles === "delete" || body.vaultFiles === "keep"
+        ? (body.vaultFiles as VaultFileAction)
+        : undefined;
+    if (body.vaultFiles !== undefined && !vaultFiles) {
+      return json({ error: "Choose how the current vault files are handled" }, 400);
+    }
+
     if (body.smb !== undefined) {
       if (!body.smb || typeof body.smb !== "object") {
         return json({ error: "SMB settings are required" }, 400);
@@ -75,6 +84,7 @@ export async function PATCH(request: Request) {
       const smb = body.smb as Record<string, unknown>;
       const text = (key: string) => (typeof smb[key] === "string" ? smb[key] : "");
       await updateSystemVaultSettings({
+        fileAction: vaultFiles,
         smb: {
           server: text("server"),
           share: text("share"),
@@ -85,6 +95,7 @@ export async function PATCH(request: Request) {
       });
     } else if (body.vaultDir !== undefined) {
       await updateSystemVaultSettings({
+        fileAction: vaultFiles,
         vaultDir: body.vaultDir === null ? null : (body.vaultDir as string),
       });
     }

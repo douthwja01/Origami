@@ -1,10 +1,16 @@
-import { mkdir, stat } from "node:fs/promises";
+import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { eq } from "drizzle-orm";
 import { logIfDatabaseUnreachable } from "@/lib/db/connection-error";
 import { getDb } from "@/lib/db";
-import { appSettings } from "@/lib/db/schema";
-import { connectSmb, disconnectSmb, offlineSmbPath } from "@/lib/vault/smb-connect";
+import { appSettings, assets, projectFolders } from "@/lib/db/schema";
+import {
+  connectSmb,
+  disconnectSmb,
+  offlineSmbPath,
+  smbFsPath,
+  vaultUsesSmbMount,
+} from "@/lib/vault/smb-connect";
 import {
   decryptSmbSettings,
   encryptSmbSettings,
@@ -47,6 +53,8 @@ export type SystemVaultSettings = {
   /** Set when saved SMB settings could not be opened. */
   smbError: string | null;
 };
+
+export type VaultFileAction = "delete" | "keep";
 
 export type SmbSettingsInput = {
   server: string;
@@ -296,6 +304,150 @@ export async function hydrateVaultDirFromSettings(): Promise<void> {
   }
 }
 
+function pathIsInside(parent: string, child: string): boolean {
+  if (sameVaultDir(parent, child)) return false;
+  const rel =
+    process.platform === "win32"
+      ? path.win32.relative(path.win32.resolve(parent), path.win32.resolve(child))
+      : path.relative(path.resolve(parent), path.resolve(child));
+  return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
+async function deleteVaultContents(root: string): Promise<void> {
+  let names: string[];
+  try {
+    names = await readdir(root);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw httpError(`Cannot delete vault files: ${(error as Error).message}`);
+  }
+  for (const name of names) {
+    await rm(path.join(root, name), { recursive: true, force: true });
+  }
+}
+
+async function resolveNextVaultTarget(patch: {
+  vaultDir?: string | null;
+  smb?: SmbSettingsInput | null;
+}): Promise<{
+  nextFsPath: string;
+  vaultDir: string | null;
+  vaultSmb: string | null;
+  prepare: () => Promise<void>;
+}> {
+  if (patch.smb) {
+    const row = await ensureSettingsRow();
+    let existing: SmbSettings | null = null;
+    if (row.vaultSmb) {
+      try {
+        existing = readStoredSmb(row.vaultSmb);
+      } catch {
+        existing = null;
+      }
+    }
+    const smb = parseSmbInput(patch.smb, existing);
+    return {
+      nextFsPath: smbFsPath(smb),
+      vaultDir: null,
+      vaultSmb: encryptSmbSettings(smb),
+      prepare: async () => {
+        await connectSmb(smb);
+      },
+    };
+  }
+
+  if (patch.vaultDir === undefined) {
+    throw httpError("Vault location is required");
+  }
+  let stored: string | null;
+  if (patch.vaultDir === null) {
+    stored = null;
+  } else {
+    const interpreted = interpretVaultDir(patch.vaultDir);
+    if (!interpreted.ok) throw httpError(interpreted.error);
+    stored = sameVaultDir(interpreted.dir, vaultDirFromEnv())
+      ? null
+      : interpreted.dir;
+  }
+  const nextFsPath = stored ?? vaultDirFromEnv();
+  return {
+    nextFsPath,
+    vaultDir: stored,
+    vaultSmb: null,
+    prepare: async () => {
+      await disconnectSmb();
+      await ensureDirectory(nextFsPath);
+    },
+  };
+}
+
+async function commitVaultMove(input: {
+  nextFsPath: string;
+  fileAction: VaultFileAction | undefined;
+  vaultDir: string | null;
+  vaultSmb: string | null;
+  prepare: () => Promise<void>;
+}): Promise<void> {
+  const previous = vaultRoot();
+  const locationChanged = !sameVaultDir(previous, input.nextFsPath);
+  if (locationChanged) {
+    if (input.fileAction !== "delete" && input.fileAction !== "keep") {
+      throw httpError(
+        "Choose whether to delete the current vault files before initializing the new location",
+      );
+    }
+    if (
+      input.fileAction === "delete" &&
+      pathIsInside(previous, input.nextFsPath) &&
+      !sameVaultDir(previous, offlineSmbPath())
+    ) {
+      throw httpError(
+        "The new vault is inside the current one. Keep the existing files, or choose a location outside the current vault.",
+      );
+    }
+  }
+
+  const deleteFiles =
+    locationChanged &&
+    input.fileAction === "delete" &&
+    !sameVaultDir(previous, offlineSmbPath());
+  const remountsCurrent = vaultUsesSmbMount(previous);
+
+  if (deleteFiles && remountsCurrent) {
+    await deleteVaultContents(previous);
+  }
+
+  await input.prepare();
+
+  if (deleteFiles && !remountsCurrent) {
+    await deleteVaultContents(previous);
+  }
+
+  if (deleteFiles && !sameVaultDir(previous, input.nextFsPath)) {
+    await deleteVaultContents(input.nextFsPath);
+  }
+
+  const db = getDb();
+  await ensureSettingsRow();
+  await db.transaction(async (tx) => {
+    if (locationChanged) {
+      await tx.delete(assets);
+      await tx.delete(projectFolders);
+    }
+    await tx
+      .update(appSettings)
+      .set({
+        vaultDir: input.vaultDir,
+        vaultSmb: input.vaultSmb,
+        ...(locationChanged
+          ? { vaultLogoPath: null, vaultLogoMime: null, vaultLogoHash: null }
+          : {}),
+      })
+      .where(eq(appSettings.id, 1));
+  });
+  applyVaultDirOverride(input.nextFsPath);
+}
+
 function parseSmbInput(input: SmbSettingsInput, existing: SmbSettings | null): SmbSettings {
   const server = cleanToken(input.server ?? "", "Server");
   const share = cleanToken(input.share ?? "", "Share");
@@ -323,53 +475,23 @@ function parseSmbInput(input: SmbSettingsInput, existing: SmbSettings | null): S
 export async function updateSystemVaultSettings(patch: {
   vaultDir?: string | null;
   smb?: SmbSettingsInput | null;
+  fileAction?: VaultFileAction;
 }): Promise<SystemVaultSettings> {
-  if (patch.smb) {
-    const row = await ensureSettingsRow();
-    let existing: SmbSettings | null = null;
-    if (row.vaultSmb) {
-      try {
-        existing = readStoredSmb(row.vaultSmb);
-      } catch {
-        existing = null;
-      }
-    }
-    const smb = parseSmbInput(patch.smb, existing);
-    let connected;
-    try {
-      connected = await connectSmb(smb);
-      await ensureDirectory(connected.fsPath);
-    } catch (error) {
-      throw httpError((error as Error).message);
-    }
-    const db = getDb();
-    await db
-      .update(appSettings)
-      .set({ vaultDir: null, vaultSmb: encryptSmbSettings(smb) })
-      .where(eq(appSettings.id, 1));
-    applyVaultDirOverride(connected.fsPath);
+  if (patch.smb === undefined && patch.vaultDir === undefined) {
     return getSystemVaultSettings();
   }
-
-  if (patch.vaultDir === undefined) return getSystemVaultSettings();
-
-  let stored: string | null;
-  if (patch.vaultDir === null) {
-    stored = null;
-  } else {
-    const interpreted = interpretVaultDir(patch.vaultDir);
-    if (!interpreted.ok) throw httpError(interpreted.error);
-    stored = sameVaultDir(interpreted.dir, vaultDirFromEnv()) ? null : interpreted.dir;
+  try {
+    const target = await resolveNextVaultTarget(patch);
+    await commitVaultMove({
+      nextFsPath: target.nextFsPath,
+      fileAction: patch.fileAction,
+      vaultDir: target.vaultDir,
+      vaultSmb: target.vaultSmb,
+      prepare: target.prepare,
+    });
+  } catch (error) {
+    if ((error as { status?: number }).status) throw error;
+    throw httpError((error as Error).message);
   }
-
-  await disconnectSmb();
-  await ensureDirectory(stored ?? vaultDirFromEnv());
-  await ensureSettingsRow();
-  const db = getDb();
-  await db
-    .update(appSettings)
-    .set({ vaultDir: stored, vaultSmb: null })
-    .where(eq(appSettings.id, 1));
-  applyVaultDirOverride(stored);
   return getSystemVaultSettings();
 }
