@@ -1,3 +1,4 @@
+import { logIfDatabaseUnreachable } from "@/lib/db/connection-error";
 import { scanVault } from "@/lib/vault/scan";
 
 const DEFAULT_INTERVAL_MS = 60_000;
@@ -21,13 +22,17 @@ async function reconcileOnce(options: { immediate?: boolean }): Promise<void> {
   try {
     await scanVault(options);
   } catch (error) {
-    console.error("[origami] vault scan failed", error);
+    if (!logIfDatabaseUnreachable(error)) {
+      console.error("[origami] vault scan failed", error);
+    }
   }
   try {
     const { scanBackups } = await import("@/lib/backups/scan");
     await scanBackups(options);
   } catch (error) {
-    console.error("[origami] backup scan failed", error);
+    if (!logIfDatabaseUnreachable(error)) {
+      console.error("[origami] backup scan failed", error);
+    }
   }
 }
 

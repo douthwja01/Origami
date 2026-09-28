@@ -1,6 +1,7 @@
 import { mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { eq } from "drizzle-orm";
+import { logIfDatabaseUnreachable } from "@/lib/db/connection-error";
 import { getDb } from "@/lib/db";
 import { appSettings } from "@/lib/db/schema";
 import { applyVaultDirOverride, vaultRoot } from "@/lib/vault/vault";
@@ -123,7 +124,9 @@ export async function hydrateVaultDirFromSettings(): Promise<void> {
   try {
     await getSystemVaultSettings();
   } catch (error) {
-    console.error("[origami] could not load vault location from settings", error);
+    if (!logIfDatabaseUnreachable(error)) {
+      console.error("[origami] could not load vault location from settings", error);
+    }
     applyVaultDirOverride(null);
   }
 }

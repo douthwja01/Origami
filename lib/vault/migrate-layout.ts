@@ -1,6 +1,7 @@
 import { access, mkdir, readdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { eq } from "drizzle-orm";
+import { logIfDatabaseUnreachable } from "@/lib/db/connection-error";
 import { getDb } from "@/lib/db";
 import { assets, projectFolders, projects } from "@/lib/db/schema";
 import { logOrigami } from "@/lib/settings/log";
@@ -186,6 +187,8 @@ export async function migrateVaultLayout(): Promise<void> {
       );
     }
   } catch (error) {
-    logOrigami("error", "vault layout migration failed", error);
+    if (!logIfDatabaseUnreachable(error)) {
+      logOrigami("error", "vault layout migration failed", error);
+    }
   }
 }

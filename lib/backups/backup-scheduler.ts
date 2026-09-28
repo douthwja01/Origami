@@ -3,6 +3,7 @@ import {
   pruneExpiredBackups,
   runBackupPass,
 } from "@/lib/backups/backup";
+import { logIfDatabaseUnreachable } from "@/lib/db/connection-error";
 import { backupIntervalDue } from "@/lib/backups/backup-types";
 
 const TICK_MS = 30_000;
@@ -43,7 +44,9 @@ async function tick() {
       `[origami] scheduled backup finished (${result.backedUp} written, ${result.skipped} skipped, ${result.failed} failed, ${result.pruned} pruned)`,
     );
   } catch (error) {
-    console.error("[origami] scheduled backup failed", error);
+    if (!logIfDatabaseUnreachable(error)) {
+      console.error("[origami] scheduled backup failed", error);
+    }
   } finally {
     globalForBackup.origamiBackupRunning = false;
   }
